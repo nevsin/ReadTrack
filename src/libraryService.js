@@ -30,6 +30,10 @@ function normalizeText(value) {
 function normalizeStatus(status) {
   const value = normalizeText(status).toLowerCase();
 
+  if (value === "completed before this year") {
+    return "Completed Before This Year";
+  }
+
   if (value === "completed") return "Completed";
   if (value === "reading") return "Reading";
   return "Want to Read";
@@ -51,7 +55,7 @@ function mapLibraryBook(item) {
     title: data.title || data.bookName || "",
     bookName: data.title || data.bookName || "",
     author: data.author || "",
-    status: data.status || "Want to Read",
+    status: normalizeStatus(data.status),
     googleBooksId: data.googleBooksId || "",
     categories: safeArray(data.categories),
     language: data.language || "",

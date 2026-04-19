@@ -62,6 +62,13 @@ function App() {
       };
     }
 
+    if (status === "Completed Before This Year") {
+      return {
+        backgroundColor: "#ecfccb",
+        color: "#3f6212",
+      };
+    }
+
     if (status === "Reading") {
       return {
         backgroundColor: "#dbeafe",
@@ -259,6 +266,14 @@ function App() {
   }, [recentSessions]);
 
   const booksRead = useMemo(() => {
+    return libraryBooks.filter(
+      (book) =>
+        book.status === "Completed" ||
+        book.status === "Completed Before This Year"
+    ).length;
+  }, [libraryBooks]);
+
+  const goalEligibleBooks = useMemo(() => {
     return libraryBooks.filter((book) => book.status === "Completed").length;
   }, [libraryBooks]);
 
@@ -272,10 +287,10 @@ function App() {
     }
 
     return Math.min(
-      Math.round((booksRead / effectiveYearlyGoal) * 100),
+      Math.round((goalEligibleBooks / effectiveYearlyGoal) * 100),
       100
     );
-  }, [booksRead, effectiveYearlyGoal]);
+  }, [goalEligibleBooks, effectiveYearlyGoal]);
 
   const stats = [
     {
