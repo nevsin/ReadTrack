@@ -1,7 +1,8 @@
 import { GOOGLE_BOOKS_API_KEY } from "./config";
 
-const MIN_RECOMMENDATIONS = 12;
-const MAX_RECOMMENDATIONS = 16;
+const MAX_RECOMMENDATIONS = 12;
+const MAX_PER_AUTHOR = 2;
+const MAX_SEED_BOOKS = 6;
 
 function safeArray(value) {
   return Array.isArray(value) ? value : [];
@@ -37,43 +38,28 @@ function getMainCategory(category) {
   return String(category || "").split("/")[0].trim();
 }
 
-function cleanWord(word) {
-  return String(word || "")
-    .toLowerCase()
-    .replace(/[^a-z0-9ğüşöçıİĞÜŞÖÇ]/gi, "");
-}
-
-function getTitleKeywords(title) {
-  const stopWords = new Set([
-    "the",
-    "a",
-    "an",
-    "and",
-    "or",
-    "of",
-    "to",
-    "in",
-    "on",
-    "for",
-    "with",
-    "book",
-    "books",
-    "novel",
-    "story",
-    "stories",
-    "volume",
-    "part",
-  ]);
-
-  return String(title || "")
-    .split(/\s+/)
-    .map(cleanWord)
-    .filter((word) => word.length >= 3 && !stopWords.has(word));
+function getNormalizedCategories(book) {
+  return getCategories(book).map((item) => normalize(getMainCategory(item)));
 }
 
 function normalizeThumbnailUrl(url) {
   if (!url) return "";
   return String(url).replace(/^http:\/\//i, "https://");
+}
+
+function isPriorityStatus(status) {
+  const normalizedStatus = normalize(status);
+  return normalizedStatus === "completed" || normalizedStatus === "reading";
+}
+
+function statusWeight(status) {
+  const normalizedStatus = normalize(status);
+
+  if (normalizedStatus === "completed") return 3;
+  if (normalizedStatus === "reading") return 2;
+  if (normalizedStatus === "want to read") return 1;
+
+  return 1;
 }
 
 function mapGoogleBook(item) {
@@ -99,14 +85,23 @@ function mapGoogleBook(item) {
   };
 }
 
-async function fetchBooks(query, maxResults = 20) {
+async function fetchBooks(query, maxResults = 10, langRestrict = "") {
   if (!query) return [];
 
-  const baseUrl = `https://www.googleapis.com/books/v1/volumes?q=${encodeURIComponent(
-    query
-  )}&maxResults=${maxResults}`;
+  const params = new URLSearchParams({
+    q: query,
+    maxResults: String(maxResults),
+  });
 
-  const url = GOOGLE_BOOKS_API_KEY ? `${baseUrl}&key=${GOOGLE_BOOKS_API_KEY}` : baseUrl;
+  if (langRestrict) {
+    params.set("langRestrict", langRestrict);
+  }
+
+  if (GOOGLE_BOOKS_API_KEY) {
+    params.set("key", GOOGLE_BOOKS_API_KEY);
+  }
+
+  const url = `https://www.googleapis.com/books/v1/volumes?${params.toString()}`;
 
   try {
     const response = await fetch(url);
@@ -132,10 +127,6 @@ function isSameAsLibraryBook(candidate, libraryBooks) {
     const libraryTitle = normalize(getBookTitle(book));
     const libraryAuthor = normalize(getPrimaryAuthor(book));
 
-    if (candidateTitle && libraryTitle && candidateTitle === libraryTitle) {
-      return true;
-    }
-
     if (
       candidateTitle &&
       candidateAuthor &&
@@ -147,75 +138,104 @@ function isSameAsLibraryBook(candidate, libraryBooks) {
       return true;
     }
 
+    if (candidateTitle && libraryTitle && candidateTitle === libraryTitle) {
+      return true;
+    }
+
     return false;
   });
 }
 
-function dedupeByTitle(books) {
+function dedupeByTitleAndAuthor(books) {
   return books.filter((book, index, self) => {
-    const title = normalize(getBookTitle(book));
-    if (!title) return false;
+    const key = `${normalize(getBookTitle(book))}::${normalize(
+      getPrimaryAuthor(book)
+    )}`;
+
+    if (key === "::") return false;
 
     return (
       index ===
-      self.findIndex((item) => normalize(getBookTitle(item)) === title)
+      self.findIndex(
+        (item) =>
+          `${normalize(getBookTitle(item))}::${normalize(
+            getPrimaryAuthor(item)
+          )}` === key
+      )
     );
   });
 }
 
-function applyAuthorBalance(books, maxPerAuthor = 2) {
-  const counts = {};
+function applyAuthorBalance(books, maxPerAuthor = MAX_PER_AUTHOR) {
+  const authorCounts = {};
 
   return books.filter((book) => {
     const author = normalize(getPrimaryAuthor(book));
+
     if (!author) return true;
 
-    counts[author] = (counts[author] || 0) + 1;
-    return counts[author] <= maxPerAuthor;
+    authorCounts[author] = (authorCounts[author] || 0) + 1;
+    return authorCounts[author] <= maxPerAuthor;
   });
 }
 
+function looksBadCandidate(book) {
+  const title = normalize(getBookTitle(book));
+  const author = normalize(getPrimaryAuthor(book));
+
+  if (!title) return true;
+  if (title.includes("dergi")) return true;
+  if (title.includes("journal")) return true;
+  if (title.includes("magazine")) return true;
+  if (author === "unknown author") return true;
+
+  return false;
+}
+
 async function enrichLibraryBooks(libraryBooks = []) {
-  const enriched = [];
+  const enrichedBooks = [];
 
   for (const book of libraryBooks) {
     const title = getBookTitle(book);
     const author = getPrimaryAuthor(book);
 
+    if (!title) {
+      enrichedBooks.push(book);
+      continue;
+    }
+
     const queries = [];
 
     if (title && author) {
-      queries.push(`intitle:${title} inauthor:${author}`);
-      queries.push(`${title} ${author}`);
+      queries.push(`intitle:"${title}" inauthor:"${author}"`);
+      queries.push(`"${title}" "${author}"`);
     }
 
-    if (title) {
-      queries.push(`intitle:${title}`);
-      queries.push(title);
-    }
+    queries.push(`intitle:"${title}"`);
+    queries.push(`"${title}"`);
 
     let bestMatch = null;
 
     for (const query of queries) {
-      const results = await fetchBooks(query, 10);
+      const results = await fetchBooks(query, 5);
 
-      if (results.length > 0) {
-        const exactMatch = results.find((result) => {
-          const sameTitle =
-            normalize(getBookTitle(result)) === normalize(title);
-          const sameAuthor =
-            !author ||
-            normalize(getPrimaryAuthor(result)) === normalize(author);
+      if (!results.length) continue;
 
-          return sameTitle && sameAuthor;
-        });
+      const exactMatch = results.find((result) => {
+        const sameTitle =
+          normalize(getBookTitle(result)) === normalize(title);
+        const sameAuthor =
+          !author ||
+          normalize(getPrimaryAuthor(result)) === normalize(author);
 
-        bestMatch = exactMatch || results[0];
-        if (bestMatch) break;
-      }
+        return sameTitle && sameAuthor;
+      });
+
+      bestMatch = exactMatch || results[0];
+      if (bestMatch) break;
     }
 
-    enriched.push({
+    enrichedBooks.push({
       ...book,
       title,
       author: author || getPrimaryAuthor(bestMatch),
@@ -227,226 +247,159 @@ async function enrichLibraryBooks(libraryBooks = []) {
       pageCount: bestMatch?.pageCount || book?.pageCount || "",
       thumbnail: bestMatch?.thumbnail || book?.thumbnail || book?.cover || "",
       cover: bestMatch?.cover || book?.cover || book?.thumbnail || "",
+      status: book?.status || "Want to Read",
     });
   }
 
-  return enriched;
+  return enrichedBooks;
 }
 
-function buildLibraryProfile(libraryBooks = []) {
-  const authorCounts = {};
-  const categoryCounts = {};
-  const keywordCounts = {};
+function pickSeedBooks(libraryBooks = []) {
+  const prioritized =
+    libraryBooks.filter((book) => isPriorityStatus(book?.status)).length > 0
+      ? libraryBooks.filter((book) => isPriorityStatus(book?.status))
+      : libraryBooks;
 
-  libraryBooks.forEach((book) => {
-    const author = normalize(getPrimaryAuthor(book));
-    const categories = getCategories(book).map((item) =>
-      normalize(getMainCategory(item))
-    );
-    const keywords = getTitleKeywords(getBookTitle(book));
-
-    if (author) {
-      authorCounts[author] = (authorCounts[author] || 0) + 1;
-    }
-
-    categories.forEach((category) => {
-      if (category) {
-        categoryCounts[category] = (categoryCounts[category] || 0) + 1;
-      }
-    });
-
-    keywords.forEach((keyword) => {
-      keywordCounts[keyword] = (keywordCounts[keyword] || 0) + 1;
-    });
-  });
-
-  const sortKeys = (obj, limit) =>
-    Object.entries(obj)
-      .sort((a, b) => b[1] - a[1])
-      .slice(0, limit)
-      .map(([key]) => key);
-
-  return {
-    topAuthors: sortKeys(authorCounts, 5),
-    topCategories: sortKeys(categoryCounts, 6),
-    topKeywords: sortKeys(keywordCounts, 8),
-  };
+  return [...prioritized]
+    .sort((a, b) => statusWeight(b?.status) - statusWeight(a?.status))
+    .slice(0, MAX_SEED_BOOKS);
 }
 
-function buildProfileQueries(profile, libraryBooks) {
+function buildSeedQueries(seedBook) {
+  const author = getPrimaryAuthor(seedBook);
+  const language = normalize(seedBook?.language);
+  const categories = getNormalizedCategories(seedBook);
+
   const queries = [];
 
-  profile.topCategories.forEach((category) => {
-    queries.push(`subject:${category}`);
-    queries.push(`${category} books`);
-    queries.push(`${category} novels`);
-    queries.push(`${category} recommended books`);
-  });
-
-  profile.topAuthors.forEach((author) => {
-    queries.push(`inauthor:${author}`);
-  });
-
-  for (
-    let i = 0;
-    i < Math.min(profile.topCategories.length, profile.topKeywords.length, 4);
-    i += 1
-  ) {
-    queries.push(`subject:${profile.topCategories[i]} ${profile.topKeywords[i]}`);
+  if (author) {
+    queries.push({
+      query: `inauthor:"${author}"`,
+      lang: language,
+      seedBook,
+    });
   }
 
-  for (
-    let i = 0;
-    i < Math.min(profile.topAuthors.length, profile.topKeywords.length, 3);
-    i += 1
-  ) {
-    queries.push(`${profile.topAuthors[i]} ${profile.topKeywords[i]}`);
-  }
+  categories.slice(0, 2).forEach((category) => {
+    queries.push({
+      query: `subject:"${category}"`,
+      lang: language,
+      seedBook,
+    });
 
-  libraryBooks.forEach((book) => {
-    const title = getBookTitle(book);
-    const author = getPrimaryAuthor(book);
-    const categories = getCategories(book).map(getMainCategory).filter(Boolean);
-    const keywords = getTitleKeywords(title);
-
-    if (author && categories[0]) {
-      queries.push(`${author} ${categories[0]}`);
-    }
-
-    if (title && author) {
-      queries.push(`${title} ${author}`);
-    }
-
-    if (keywords.length >= 2) {
-      queries.push(`${keywords[0]} ${keywords[1]}`);
-    }
-
-    if (categories[0] && keywords[0]) {
-      queries.push(`${categories[0]} ${keywords[0]}`);
+    if (author) {
+      queries.push({
+        query: `subject:"${category}" inauthor:"${author}"`,
+        lang: language,
+        seedBook,
+      });
     }
   });
 
-  return [...new Set(queries)].filter(Boolean).slice(0, 30);
+  return queries;
 }
 
-function buildFallbackQueries(profile) {
-  const queries = [
-    "award winning novels",
-    "recommended fiction books",
-    "best books to read",
-    "must read novels",
-    "popular literature books",
-    "top rated books",
-    "best modern fiction",
-    "popular classic books",
-  ];
-
-  profile.topCategories.slice(0, 4).forEach((category) => {
-    queries.push(`${category} bestseller`);
-    queries.push(`${category} top books`);
-    queries.push(`${category} recommended novels`);
-  });
-
-  profile.topAuthors.slice(0, 3).forEach((author) => {
-    queries.push(`inauthor:${author}`);
-  });
-
-  return [...new Set(queries)].filter(Boolean);
-}
-
-function scoreCandidate(candidate, profile) {
+function scoreCandidateAgainstSeed(candidate, seedBook) {
   let score = 0;
 
   const candidateAuthor = normalize(getPrimaryAuthor(candidate));
-  const candidateCategories = getCategories(candidate).map((item) =>
-    normalize(getMainCategory(item))
-  );
-  const candidateTitle = normalize(getBookTitle(candidate));
+  const seedAuthor = normalize(getPrimaryAuthor(seedBook));
 
-  if (profile.topAuthors.includes(candidateAuthor)) {
-    score += 10;
+  const candidateCategories = getNormalizedCategories(candidate);
+  const seedCategories = getNormalizedCategories(seedBook);
+
+  const candidateLanguage = normalize(candidate?.language);
+  const seedLanguage = normalize(seedBook?.language);
+
+  if (candidateAuthor && seedAuthor && candidateAuthor === seedAuthor) {
+    score += 12;
   }
 
-  profile.topCategories.forEach((category) => {
-    if (candidateCategories.includes(category)) {
-      score += 8;
+  seedCategories.forEach((category) => {
+    if (category && candidateCategories.includes(category)) {
+      score += 6;
     }
   });
 
-  profile.topKeywords.forEach((keyword) => {
-    if (candidateTitle.includes(keyword)) {
-      score += 3;
-    }
-  });
+  if (candidateLanguage && seedLanguage && candidateLanguage === seedLanguage) {
+    score += 3;
+  }
 
-  if (candidate.description) score += 1;
   if (candidate.thumbnail) score += 1;
+  if (candidate.description) score += 1;
 
   return score;
 }
 
-function buildReason(candidate, profile) {
+function buildReasonFromSeed(candidate, seedBook) {
   const candidateAuthor = normalize(getPrimaryAuthor(candidate));
-  const candidateCategories = getCategories(candidate).map((item) =>
-    normalize(getMainCategory(item))
-  );
-  const candidateTitle = normalize(getBookTitle(candidate));
+  const seedAuthor = normalize(getPrimaryAuthor(seedBook));
 
-  if (profile.topAuthors.includes(candidateAuthor) && candidateAuthor) {
-    return `Suggested because it matches an author pattern in your library: ${getPrimaryAuthor(
-      candidate
+  if (candidateAuthor && seedAuthor && candidateAuthor === seedAuthor) {
+    return `Suggested because it matches an author in your library: ${getPrimaryAuthor(
+      seedBook
     )}.`;
   }
 
-  const matchedCategory = profile.topCategories.find((category) =>
-    candidateCategories.includes(category)
+  const candidateCategories = getCategories(candidate);
+  const seedCategories = getNormalizedCategories(seedBook);
+
+  const matchedCategory = seedCategories.find((category) =>
+    getNormalizedCategories(candidate).includes(category)
   );
 
   if (matchedCategory) {
-    return `Suggested because it matches one of your main reading categories: ${getMainCategory(
-      getCategories(candidate)[0]
+    const displayCategory =
+      candidateCategories.find(
+        (category) =>
+          normalize(getMainCategory(category)) === matchedCategory
+      ) || matchedCategory;
+
+    return `Suggested because it matches your reading category: ${getMainCategory(
+      displayCategory
     )}.`;
   }
 
-  const matchedKeyword = profile.topKeywords.find((keyword) =>
-    candidateTitle.includes(keyword)
-  );
-
-  if (matchedKeyword) {
-    return "Suggested because it shares a similar title/theme pattern with books in your library.";
-  }
-
-  return "Suggested based on your full library profile.";
+  return `Suggested because it is similar to ${getBookTitle(seedBook)}.`;
 }
 
-async function collectCandidates(queries, libraryBooks, profile) {
-  const settled = await Promise.allSettled(
-    queries.map((query) => fetchBooks(query, 20))
+async function collectCandidates(seedBooks, libraryBooks) {
+  const queryConfigs = seedBooks.flatMap(buildSeedQueries);
+
+  const settledResults = await Promise.allSettled(
+    queryConfigs.map((config) => fetchBooks(config.query, 8, config.lang))
   );
 
   let collected = [];
 
-  settled.forEach((result) => {
-    if (result.status === "fulfilled") {
-      collected = collected.concat(result.value);
-    }
+  settledResults.forEach((result, index) => {
+    if (result.status !== "fulfilled") return;
+
+    const config = queryConfigs[index];
+    const seedBook = config.seedBook;
+
+    result.value.forEach((candidate) => {
+      if (isSameAsLibraryBook(candidate, libraryBooks)) return;
+      if (looksBadCandidate(candidate)) return;
+
+      const score = scoreCandidateAgainstSeed(candidate, seedBook);
+
+      if (score < 6) return;
+
+      collected.push({
+        ...candidate,
+        score,
+        reason: buildReasonFromSeed(candidate, seedBook),
+      });
+    });
   });
 
-  collected = collected
-    .filter((candidate) => !isSameAsLibraryBook(candidate, libraryBooks))
-    .map((candidate) => ({
-      ...candidate,
-      score: scoreCandidate(candidate, profile),
-      reason: buildReason(candidate, profile),
-    }));
-
-  let results = dedupeByTitle(collected)
-    .filter((book) => getBookTitle(book))
+  collected = dedupeByTitleAndAuthor(collected)
     .sort((a, b) => (b.score || 0) - (a.score || 0));
 
-  results = applyAuthorBalance(results, 2);
+  collected = applyAuthorBalance(collected, MAX_PER_AUTHOR);
 
-  return results;
+  return collected;
 }
 
 export async function getPersonalizedRecommendations(libraryBooks = []) {
@@ -459,19 +412,13 @@ export async function getPersonalizedRecommendations(libraryBooks = []) {
   }
 
   const enrichedLibrary = await enrichLibraryBooks(cleanLibrary);
-  const profile = buildLibraryProfile(enrichedLibrary);
+  const seedBooks = pickSeedBooks(enrichedLibrary);
 
-  const primaryQueries = buildProfileQueries(profile, enrichedLibrary);
-  let results = await collectCandidates(primaryQueries, enrichedLibrary, profile);
-
-  if (results.length < MIN_RECOMMENDATIONS) {
-    const fallbackQueries = buildFallbackQueries(profile);
-    results = await collectCandidates(
-      [...primaryQueries, ...fallbackQueries],
-      enrichedLibrary,
-      profile
-    );
+  if (!seedBooks.length) {
+    return [];
   }
+
+  const results = await collectCandidates(seedBooks, enrichedLibrary);
 
   return results.slice(0, MAX_RECOMMENDATIONS);
 }

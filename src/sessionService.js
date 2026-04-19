@@ -8,11 +8,25 @@ import {
   query,
   serverTimestamp,
 } from "firebase/firestore";
-import { db } from "./firebase";
+import { db, auth } from "./firebase";
 
-const readingSessionsCollectionRef = collection(db, "readingSessions");
+function getCurrentUserId() {
+  const uid = auth.currentUser?.uid;
+
+  if (!uid) {
+    throw new Error("User is not authenticated.");
+  }
+
+  return uid;
+}
+
+function getReadingSessionsCollectionRef() {
+  const uid = getCurrentUserId();
+  return collection(db, "users", uid, "readingSessions");
+}
 
 export const getReadingSessions = async () => {
+  const readingSessionsCollectionRef = getReadingSessionsCollectionRef();
   const q = query(readingSessionsCollectionRef, orderBy("createdAt", "desc"));
   const snapshot = await getDocs(q);
 
@@ -23,6 +37,7 @@ export const getReadingSessions = async () => {
       id: docItem.id,
       bookTitle: data.bookTitle || "",
       duration: data.duration || 0,
+      pagesRead: data.pagesRead || 0,
       date: data.date || "Recently",
       createdAt: data.createdAt || null,
     };
@@ -30,9 +45,12 @@ export const getReadingSessions = async () => {
 };
 
 export const addReadingSession = async (session) => {
+  const readingSessionsCollectionRef = getReadingSessionsCollectionRef();
+
   const newSession = {
-    bookTitle: session.bookTitle.trim(),
-    duration: Number(session.duration),
+    bookTitle: String(session.bookTitle || "").trim(),
+    duration: Number(session.duration) || 0,
+    pagesRead: Number(session.pagesRead) || 0,
     date: "Today",
     createdAt: serverTimestamp(),
   };
@@ -46,6 +64,7 @@ export const addReadingSession = async (session) => {
 };
 
 export const deleteReadingSession = async (sessionId) => {
-  const sessionDocRef = doc(db, "readingSessions", sessionId);
+  const uid = getCurrentUserId();
+  const sessionDocRef = doc(db, "users", uid, "readingSessions", sessionId);
   await deleteDoc(sessionDocRef);
 };

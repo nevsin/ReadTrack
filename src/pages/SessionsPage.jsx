@@ -1,9 +1,12 @@
 function SessionsPage({
   recentSessions,
+  libraryBooks,
   bookTitle,
   setBookTitle,
   duration,
   setDuration,
+  pagesRead,
+  setPagesRead,
   handleAddSession,
   handleDeleteSession,
   sessionsLoading,
@@ -104,6 +107,10 @@ function SessionsPage({
     gap: "16px",
   };
 
+  const selectableBooks = libraryBooks.filter(
+    (book) => book.status === "Reading"
+  );
+
   return (
     <div style={pageWrapStyle}>
       <div style={headerStyle}>
@@ -126,17 +133,23 @@ function SessionsPage({
           }}
         >
           <div style={{ flex: 2, minWidth: "240px" }}>
-            <label style={labelStyle}>Book Title</label>
-            <input
-              type="text"
+            <label style={labelStyle}>Select Book</label>
+            <select
               value={bookTitle}
               onChange={(event) => setBookTitle(event.target.value)}
-              placeholder="Enter book name"
               style={inputStyle}
-            />
+            >
+              <option value="">Choose a book from your library</option>
+
+              {selectableBooks.map((book) => (
+                <option key={book.id} value={book.title}>
+                  {book.title} — {book.author}
+                </option>
+              ))}
+            </select>
           </div>
 
-          <div style={{ flex: 1, minWidth: "180px" }}>
+          <div style={{ flex: 1, minWidth: "160px" }}>
             <label style={labelStyle}>Duration (min)</label>
             <input
               type="number"
@@ -148,10 +161,28 @@ function SessionsPage({
             />
           </div>
 
+          <div style={{ flex: 1, minWidth: "160px" }}>
+            <label style={labelStyle}>Pages Read</label>
+            <input
+              type="number"
+              min="1"
+              value={pagesRead}
+              onChange={(event) => setPagesRead(event.target.value)}
+              placeholder="15"
+              style={inputStyle}
+            />
+          </div>
+
           <button type="submit" style={buttonStyle}>
             Add Session
           </button>
         </form>
+
+        {selectableBooks.length === 0 && (
+          <p style={{ margin: "14px 0 0 0", color: "#7c6a96" }}>
+            Mark a book as Reading in your library to log a session for it.
+          </p>
+        )}
       </div>
 
       <div style={cardStyle}>
@@ -186,7 +217,10 @@ function SessionsPage({
                     fontSize: "15px",
                   }}
                 >
-                  {session.duration} minutes • {session.date}
+                  {session.duration} minutes
+                  {session.pagesRead ? ` • ${session.pagesRead} pages` : ""}
+                  {" • "}
+                  {session.date}
                 </p>
               </div>
 

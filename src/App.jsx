@@ -6,8 +6,10 @@ import LibraryPage from "./pages/LibraryPage";
 import SessionsPage from "./pages/SessionsPage";
 import SearchPage from "./pages/SearchPage";
 import RecommendationsPage from "./pages/RecommendationsPage";
+import AuthPage from "./pages/AuthPage";
+import { getYearlyGoal, saveYearlyGoal } from "./goalService";
 import { GOOGLE_BOOKS_API_KEY } from "./config";
-import { statIcons, yearlyBookGoal } from "./data/dashboardData";
+import { statIcons } from "./data/dashboardData";
 import {
   addLibraryBook,
   deleteLibraryBook,
@@ -21,9 +23,37 @@ import {
   deleteReadingSession,
 } from "./sessionService";
 import { getPersonalizedRecommendations } from "./recommendationService";
+import { observeAuthState, logoutUser } from "./authService";
 import "./App.css";
 
 function App() {
+  const [currentUser, setCurrentUser] = useState(null);
+  const [authLoading, setAuthLoading] = useState(true);
+
+  const [recentSessions, setRecentSessions] = useState([]);
+  const [sessionsLoading, setSessionsLoading] = useState(true);
+
+  const [recommendations, setRecommendations] = useState([]);
+  const [recommendationsLoading, setRecommendationsLoading] = useState(true);
+
+  const [libraryBooks, setLibraryBooks] = useState([]);
+
+  const [bookTitle, setBookTitle] = useState("");
+  const [duration, setDuration] = useState("");
+  const [pagesRead, setPagesRead] = useState("");
+
+  const [bookName, setBookName] = useState("");
+  const [authorName, setAuthorName] = useState("");
+  const [bookStatus, setBookStatus] = useState("Want to Read");
+
+  const [searchTerm, setSearchTerm] = useState("");
+  const [searchResults, setSearchResults] = useState([]);
+  const [isSearching, setIsSearching] = useState(false);
+  const [searchError, setSearchError] = useState("");
+
+  const [yearlyGoal, setYearlyGoal] = useState(null);
+  const [goalInput, setGoalInput] = useState("");
+
   function getStatusStyle(status) {
     if (status === "Completed") {
       return {
@@ -44,26 +74,6 @@ function App() {
       color: "#475569",
     };
   }
-
-  const [recentSessions, setRecentSessions] = useState([]);
-  const [sessionsLoading, setSessionsLoading] = useState(true);
-
-  const [recommendations, setRecommendations] = useState([]);
-  const [recommendationsLoading, setRecommendationsLoading] = useState(true);
-
-  const [libraryBooks, setLibraryBooks] = useState([]);
-
-  const [bookTitle, setBookTitle] = useState("");
-  const [duration, setDuration] = useState("");
-
-  const [bookName, setBookName] = useState("");
-  const [authorName, setAuthorName] = useState("");
-  const [bookStatus, setBookStatus] = useState("Want to Read");
-
-  const [searchTerm, setSearchTerm] = useState("");
-  const [searchResults, setSearchResults] = useState([]);
-  const [isSearching, setIsSearching] = useState(false);
-  const [searchError, setSearchError] = useState("");
 
   function normalizeText(value) {
     return String(value || "").trim().toLowerCase();
@@ -121,7 +131,97 @@ function App() {
     }
   }
 
+  async function handleRefreshRecommendations() {
+    await getFreshRecommendations(libraryBooks);
+  }
+
+  function handleAuthSuccess(user) {
+    window.history.replaceState({}, "", "/");
+    setCurrentUser(user);
+  }
+
+  function resetSearchState() {
+    setSearchTerm("");
+    setSearchResults([]);
+    setIsSearching(false);
+    setSearchError("");
+  }
+
+  async function loadYearlyGoal() {
+    try {
+      const goalData = await getYearlyGoal();
+
+      if (goalData && Number(goalData.targetBooks) > 0) {
+        const target = Number(goalData.targetBooks);
+        setYearlyGoal(target);
+        setGoalInput(String(target));
+      } else {
+        setYearlyGoal(null);
+        setGoalInput("");
+      }
+    } catch (error) {
+      console.error("Failed to load yearly goal:", error);
+      setYearlyGoal(null);
+      setGoalInput("");
+    }
+  }
+
+  async function handleSaveGoal(event) {
+    event.preventDefault();
+
+    const numericGoal = Number(goalInput);
+
+    if (!numericGoal || numericGoal <= 0) {
+      alert("Please enter a valid yearly goal.");
+      return;
+    }
+
+    try {
+      await saveYearlyGoal(numericGoal);
+      setYearlyGoal(numericGoal);
+    } catch (error) {
+      console.error("Failed to save yearly goal:", error);
+      alert("Could not save yearly goal.");
+    }
+  }
+
   useEffect(() => {
+    const unsubscribe = observeAuthState((user) => {
+      if (user && user.emailVerified) {
+        setCurrentUser(user);
+      } else {
+        setCurrentUser(null);
+      }
+
+      setAuthLoading(false);
+    });
+
+    return () => unsubscribe();
+  }, []);
+
+  useEffect(() => {
+    resetSearchState();
+  }, [currentUser?.uid]);
+
+  useEffect(() => {
+    if (!currentUser) {
+      setLibraryBooks([]);
+      setRecentSessions([]);
+      setRecommendations([]);
+      setYearlyGoal(null);
+      setGoalInput("");
+      setBookTitle("");
+      setDuration("");
+      setPagesRead("");
+      setBookName("");
+      setAuthorName("");
+      setBookStatus("Want to Read");
+      resetSearchState();
+      setSessionsLoading(false);
+      setRecommendationsLoading(false);
+      return;
+    }
+
     async function loadLibraryBooks() {
       try {
         const books = await getLibraryBooks();
@@ -144,9 +244,12 @@ function App() {
       }
     }
 
-    loadLibraryBooks();
-    loadSessions();
-  }, []);
+    async function loadInitialData() {
+      await Promise.all([loadLibraryBooks(), loadSessions(), loadYearlyGoal()]);
+    }
+
+    loadInitialData();
+  }, [currentUser]);
 
   const totalReadingTime = useMemo(() => {
     return recentSessions.reduce(
@@ -156,18 +259,23 @@ function App() {
   }, [recentSessions]);
 
   const booksRead = useMemo(() => {
-    const uniqueBooks = new Set(
-      recentSessions
-        .filter((session) => session.bookTitle?.trim())
-        .map((session) => session.bookTitle.trim().toLowerCase())
-    );
+    return libraryBooks.filter((book) => book.status === "Completed").length;
+  }, [libraryBooks]);
 
-    return uniqueBooks.size;
-  }, [recentSessions]);
+  const effectiveYearlyGoal = useMemo(() => {
+    return Number(yearlyGoal) > 0 ? Number(yearlyGoal) : 0;
+  }, [yearlyGoal]);
 
   const goalProgress = useMemo(() => {
-    return Math.min(Math.round((booksRead / yearlyBookGoal) * 100), 100);
-  }, [booksRead]);
+    if (!effectiveYearlyGoal) {
+      return 0;
+    }
+
+    return Math.min(
+      Math.round((booksRead / effectiveYearlyGoal) * 100),
+      100
+    );
+  }, [booksRead, effectiveYearlyGoal]);
 
   const stats = [
     {
@@ -190,19 +298,21 @@ function App() {
   async function handleAddSession(event) {
     event.preventDefault();
 
-    if (!bookTitle.trim() || !duration.trim()) {
+    if (!bookTitle.trim() || !duration.trim() || !pagesRead.trim()) {
       return;
     }
 
     try {
       const savedSession = await addReadingSession({
-        bookTitle,
-        duration,
+        bookTitle: bookTitle.trim(),
+        duration: Number(duration),
+        pagesRead: Number(pagesRead),
       });
 
       setRecentSessions((prevSessions) => [savedSession, ...prevSessions]);
       setBookTitle("");
       setDuration("");
+      setPagesRead("");
     } catch (error) {
       console.error("Failed to add reading session:", error);
     }
@@ -320,9 +430,21 @@ function App() {
         cover: newBook.thumbnail || newBook.cover || "",
       };
 
-      const updatedBooks = [savedBook, ...libraryBooks];
-      setLibraryBooks(updatedBooks);
-      await getFreshRecommendations(updatedBooks);
+      setLibraryBooks((prevBooks) => [savedBook, ...prevBooks]);
+
+      setRecommendations((prevRecommendations) =>
+        prevRecommendations.filter((recommendation) => {
+          const sameTitle =
+            normalizeText(getBookTitle(recommendation)) ===
+            normalizeText(getBookTitle(book));
+
+          const sameAuthor =
+            normalizeText(getPrimaryAuthor(recommendation)) ===
+            normalizeText(getPrimaryAuthor(book));
+
+          return !(sameTitle && sameAuthor);
+        })
+      );
     } catch (error) {
       console.error("Failed to add searched book:", error);
     }
@@ -330,6 +452,8 @@ function App() {
 
   async function handleSearchBooks() {
     if (!searchTerm.trim()) {
+      setSearchResults([]);
+      setSearchError("");
       return;
     }
 
@@ -373,9 +497,22 @@ function App() {
       setSearchResults(books);
     } catch (error) {
       console.error("Search failed:", error);
+      setSearchResults([]);
       setSearchError("Could not load books. Please try again.");
     } finally {
       setIsSearching(false);
+    }
+  }
+
+  async function handleLogout() {
+    try {
+      resetSearchState();
+      setYearlyGoal(null);
+      setGoalInput("");
+      window.history.replaceState({}, "", "/");
+      await logoutUser();
+    } catch (error) {
+      console.error("Logout failed:", error);
     }
   }
 
@@ -399,6 +536,54 @@ function App() {
     minHeight: "calc(100vh - 48px)",
   };
 
+  const topBarStyle = {
+    display: "flex",
+    justifyContent: "flex-end",
+    alignItems: "center",
+    gap: "12px",
+    marginBottom: "16px",
+    padding: "0 4px",
+  };
+
+  const userBadgeStyle = {
+    color: "#6f5f88",
+    fontSize: "14px",
+    fontWeight: "600",
+  };
+
+  const logoutButtonStyle = {
+    border: "none",
+    background: "#f3e8ff",
+    color: "#7c3aed",
+    padding: "10px 14px",
+    borderRadius: "12px",
+    cursor: "pointer",
+    fontWeight: "700",
+  };
+
+  if (authLoading) {
+    return (
+      <div
+        style={{
+          minHeight: "100vh",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          background:
+            "radial-gradient(circle at top left, #f3ecff 0%, #faf7ff 30%, #f6f4fb 100%)",
+        }}
+      >
+        <p style={{ color: "#6f5f88", fontSize: "16px", fontWeight: "600" }}>
+          Loading...
+        </p>
+      </div>
+    );
+  }
+
+  if (!currentUser) {
+    return <AuthPage onAuthSuccess={handleAuthSuccess} />;
+  }
+
   return (
     <BrowserRouter>
       <div style={appStyle}>
@@ -406,6 +591,17 @@ function App() {
           <Sidebar />
 
           <main style={contentStyle}>
+            <div style={topBarStyle}>
+              <span style={userBadgeStyle}>{currentUser.email}</span>
+              <button
+                type="button"
+                onClick={handleLogout}
+                style={logoutButtonStyle}
+              >
+                Logout
+              </button>
+            </div>
+
             <Routes>
               <Route
                 path="/"
@@ -414,9 +610,12 @@ function App() {
                     stats={stats}
                     recentSessions={recentSessions}
                     recommendations={recommendations}
-                    yearlyBookGoal={yearlyBookGoal}
+                    yearlyBookGoal={effectiveYearlyGoal}
                     goalProgress={goalProgress}
                     sessionsLoading={sessionsLoading}
+                    goalInput={goalInput}
+                    setGoalInput={setGoalInput}
+                    handleSaveGoal={handleSaveGoal}
                   />
                 }
               />
@@ -445,10 +644,13 @@ function App() {
                 element={
                   <SessionsPage
                     recentSessions={recentSessions}
+                    libraryBooks={libraryBooks}
                     bookTitle={bookTitle}
                     setBookTitle={setBookTitle}
                     duration={duration}
                     setDuration={setDuration}
+                    pagesRead={pagesRead}
+                    setPagesRead={setPagesRead}
                     handleAddSession={handleAddSession}
                     handleDeleteSession={handleDeleteSession}
                     sessionsLoading={sessionsLoading}
@@ -476,9 +678,9 @@ function App() {
                 element={
                   <RecommendationsPage
                     recommendations={recommendations}
-                    yearlyBookGoal={yearlyBookGoal}
-                    goalProgress={goalProgress}
                     recommendationsLoading={recommendationsLoading}
+                    onRefreshRecommendations={handleRefreshRecommendations}
+                    onAddRecommendationToLibrary={handleAddSearchResultToLibrary}
                   />
                 }
               />

@@ -6,9 +6,22 @@ import {
   getDocs,
   updateDoc,
 } from "firebase/firestore";
-import { db } from "./firebase";
+import { db, auth } from "./firebase";
 
-const libraryCollection = collection(db, "libraryBooks");
+function getCurrentUserId() {
+  const uid = auth.currentUser?.uid;
+
+  if (!uid) {
+    throw new Error("User is not authenticated.");
+  }
+
+  return uid;
+}
+
+function getLibraryCollectionRef() {
+  const uid = getCurrentUserId();
+  return collection(db, "users", uid, "libraryBooks");
+}
 
 function normalizeText(value) {
   return String(value || "").trim();
@@ -39,7 +52,6 @@ function mapLibraryBook(item) {
     bookName: data.title || data.bookName || "",
     author: data.author || "",
     status: data.status || "Want to Read",
-
     googleBooksId: data.googleBooksId || "",
     categories: safeArray(data.categories),
     language: data.language || "",
@@ -48,7 +60,6 @@ function mapLibraryBook(item) {
     description: data.description || "",
     publishedDate: data.publishedDate || "",
     pageCount: data.pageCount || "",
-
     createdAt: data.createdAt || null,
   };
 }
@@ -60,7 +71,6 @@ export function buildLibraryBookFromGoogleBook(googleBook, status = "Want to Rea
       googleBook?.author ||
       (Array.isArray(googleBook?.authors) ? googleBook.authors.join(", ") : ""),
     status: normalizeStatus(status),
-
     googleBooksId: googleBook?.googleBooksId || googleBook?.id || "",
     categories: dedupeArray(googleBook?.categories || googleBook?.subjects || []),
     language: googleBook?.language || "",
@@ -72,6 +82,7 @@ export function buildLibraryBookFromGoogleBook(googleBook, status = "Want to Rea
 }
 
 export async function getLibraryBooks() {
+  const libraryCollection = getLibraryCollectionRef();
   const snapshot = await getDocs(libraryCollection);
 
   const books = snapshot.docs.map(mapLibraryBook);
@@ -94,11 +105,12 @@ export async function getLibraryBooks() {
 }
 
 export async function addLibraryBook(book) {
+  const libraryCollection = getLibraryCollectionRef();
+
   const payload = {
     title: normalizeText(book?.title || book?.bookName),
     author: normalizeText(book?.author),
     status: normalizeStatus(book?.status),
-
     googleBooksId: normalizeText(book?.googleBooksId),
     categories: dedupeArray(book?.categories || book?.subjects || []),
     language: normalizeText(book?.language),
@@ -106,7 +118,6 @@ export async function addLibraryBook(book) {
     description: normalizeText(book?.description),
     publishedDate: normalizeText(book?.publishedDate),
     pageCount: book?.pageCount || "",
-
     createdAt: new Date(),
   };
 
@@ -147,16 +158,20 @@ export async function addLibraryBook(book) {
 }
 
 export async function deleteLibraryBook(bookId) {
-  await deleteDoc(doc(db, "libraryBooks", bookId));
+  const uid = getCurrentUserId();
+  await deleteDoc(doc(db, "users", uid, "libraryBooks", bookId));
 }
 
 export async function updateLibraryBookStatus(bookId, newStatus) {
-  await updateDoc(doc(db, "libraryBooks", bookId), {
+  const uid = getCurrentUserId();
+
+  await updateDoc(doc(db, "users", uid, "libraryBooks", bookId), {
     status: normalizeStatus(newStatus),
   });
 }
 
 export async function updateLibraryBook(bookId, updates = {}) {
+  const uid = getCurrentUserId();
   const payload = {};
 
   if (updates.title !== undefined || updates.bookName !== undefined) {
@@ -199,5 +214,5 @@ export async function updateLibraryBook(bookId, updates = {}) {
     payload.pageCount = updates.pageCount || "";
   }
 
-  await updateDoc(doc(db, "libraryBooks", bookId), payload);
+  await updateDoc(doc(db, "users", uid, "libraryBooks", bookId), payload);
 }

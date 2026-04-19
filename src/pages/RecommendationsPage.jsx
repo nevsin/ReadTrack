@@ -1,8 +1,8 @@
 function RecommendationsPage({
   recommendations,
-  yearlyBookGoal,
-  goalProgress,
   recommendationsLoading,
+  onRefreshRecommendations,
+  onAddRecommendationToLibrary,
 }) {
   const pageWrapStyle = {
     display: "flex",
@@ -16,6 +16,16 @@ function RecommendationsPage({
     borderRadius: "28px",
     padding: "28px",
     boxShadow: "0 18px 40px rgba(76, 29, 149, 0.05)",
+    display: "flex",
+    justifyContent: "space-between",
+    alignItems: "flex-start",
+    gap: "20px",
+    flexWrap: "wrap",
+  };
+
+  const headerTextWrapStyle = {
+    flex: 1,
+    minWidth: "280px",
   };
 
   const titleStyle = {
@@ -32,10 +42,17 @@ function RecommendationsPage({
     lineHeight: "1.6",
   };
 
-  const topGridStyle = {
-    display: "grid",
-    gridTemplateColumns: "1.2fr 2fr",
-    gap: "20px",
+  const refreshButtonStyle = {
+    border: "none",
+    background: "linear-gradient(135deg, #8b5cf6 0%, #a855f7 100%)",
+    color: "#ffffff",
+    padding: "12px 18px",
+    borderRadius: "14px",
+    cursor: recommendationsLoading ? "not-allowed" : "pointer",
+    fontWeight: "700",
+    fontSize: "14px",
+    boxShadow: "0 12px 24px rgba(139, 92, 246, 0.18)",
+    opacity: recommendationsLoading ? 0.7 : 1,
   };
 
   const cardStyle = {
@@ -53,45 +70,6 @@ function RecommendationsPage({
     fontSize: "24px",
     color: "#24153f",
     fontWeight: "700",
-  };
-
-  const smallLabelStyle = {
-    margin: 0,
-    fontSize: "13px",
-    fontWeight: "700",
-    color: "#8f7aa9",
-    textTransform: "uppercase",
-    letterSpacing: "0.06em",
-  };
-
-  const bigValueStyle = {
-    margin: "10px 0 8px 0",
-    fontSize: "44px",
-    color: "#7c3aed",
-    fontWeight: "800",
-    lineHeight: "1",
-  };
-
-  const helperTextStyle = {
-    margin: 0,
-    color: "#7c6a96",
-    fontSize: "15px",
-    lineHeight: "1.6",
-  };
-
-  const progressOuterStyle = {
-    height: "12px",
-    borderRadius: "999px",
-    backgroundColor: "#eadcff",
-    overflow: "hidden",
-    marginTop: "18px",
-  };
-
-  const progressInnerStyle = {
-    width: `${goalProgress}%`,
-    height: "100%",
-    borderRadius: "999px",
-    background: "linear-gradient(90deg, #8b5cf6 0%, #c084fc 100%)",
   };
 
   const recommendationGridStyle = {
@@ -122,48 +100,37 @@ function RecommendationsPage({
     fontWeight: "700",
   };
 
+  const addButtonStyle = {
+    marginTop: "auto",
+    border: "none",
+    background: "linear-gradient(135deg, #7c3aed 0%, #a855f7 100%)",
+    color: "#ffffff",
+    padding: "12px 14px",
+    borderRadius: "12px",
+    cursor: "pointer",
+    fontWeight: "700",
+    fontSize: "14px",
+    boxShadow: "0 10px 20px rgba(124, 58, 237, 0.16)",
+  };
+
   return (
     <div style={pageWrapStyle}>
       <div style={headerStyle}>
-        <h2 style={titleStyle}>Recommendations</h2>
-        <p style={subtitleStyle}>
-          Discover suggested books based on your reading activity and current
-          progress.
-        </p>
-      </div>
-
-      <div style={topGridStyle}>
-        <div style={cardStyle}>
-          <p style={smallLabelStyle}>Goal Progress</p>
-          <h3 style={bigValueStyle}>{goalProgress}%</h3>
-          <p style={helperTextStyle}>
-            You are working toward your yearly target of {yearlyBookGoal} books.
-          </p>
-
-          <div style={progressOuterStyle}>
-            <div style={progressInnerStyle} />
-          </div>
-
-          <p
-            style={{
-              margin: "14px 0 0 0",
-              color: "#7c3aed",
-              fontWeight: "700",
-              fontSize: "14px",
-            }}
-          >
-            {goalProgress}% completed
+        <div style={headerTextWrapStyle}>
+          <h2 style={titleStyle}>Recommendations</h2>
+          <p style={subtitleStyle}>
+            Discover suggested books based on your library and reading profile.
           </p>
         </div>
 
-        <div style={cardStyle}>
-          <h3 style={sectionTitleStyle}>Recommendation Notes</h3>
-          <p style={helperTextStyle}>
-            These suggestions are generated from your reading library and reading
-            status. The system uses your saved books to find similar titles and
-            show more relevant recommendations.
-          </p>
-        </div>
+        <button
+          type="button"
+          onClick={onRefreshRecommendations}
+          style={refreshButtonStyle}
+          disabled={recommendationsLoading}
+        >
+          {recommendationsLoading ? "Refreshing..." : "Refresh Recommendations"}
+        </button>
       </div>
 
       <div style={cardStyle}>
@@ -208,17 +175,6 @@ function RecommendationsPage({
                 <p
                   style={{
                     margin: 0,
-                    color: "#7c6a96",
-                    lineHeight: "1.7",
-                    fontSize: "15px",
-                  }}
-                >
-                  {recommendation.reason}
-                </p>
-
-                <p
-                  style={{
-                    margin: 0,
                     color: "#9a88b3",
                     fontSize: "14px",
                     fontWeight: "600",
@@ -226,6 +182,14 @@ function RecommendationsPage({
                 >
                   {recommendation.author}
                 </p>
+
+                <button
+                  type="button"
+                  onClick={() => onAddRecommendationToLibrary(recommendation)}
+                  style={addButtonStyle}
+                >
+                  Add to Library
+                </button>
               </div>
             ))}
           </div>

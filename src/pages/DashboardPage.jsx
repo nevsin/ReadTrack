@@ -14,6 +14,9 @@ function DashboardPage({
   yearlyBookGoal,
   goalProgress,
   sessionsLoading,
+  goalInput,
+  setGoalInput,
+  handleSaveGoal,
 }) {
   const pageWrapStyle = {
     display: "flex",
@@ -87,7 +90,8 @@ function DashboardPage({
   };
 
   const heroMiniCardStyle = {
-    minWidth: "230px",
+    width: "300px",
+    maxWidth: "100%",
     backgroundColor: "rgba(255,255,255,0.12)",
     border: "1px solid rgba(255,255,255,0.16)",
     borderRadius: "22px",
@@ -111,6 +115,51 @@ function DashboardPage({
     marginTop: "8px",
     marginBottom: 0,
     color: "rgba(255,255,255,0.75)",
+    fontSize: "14px",
+  };
+
+  const heroProgressOuterStyle = {
+    height: "10px",
+    borderRadius: "999px",
+    backgroundColor: "rgba(255,255,255,0.18)",
+    overflow: "hidden",
+    marginTop: "16px",
+  };
+
+  const heroProgressInnerStyle = {
+    width: `${goalProgress}%`,
+    height: "100%",
+    borderRadius: "999px",
+    background: "linear-gradient(90deg, #ffffff 0%, #f5d0fe 100%)",
+  };
+
+  const heroGoalFormStyle = {
+    display: "flex",
+    gap: "10px",
+    marginTop: "16px",
+    flexWrap: "wrap",
+  };
+
+  const heroGoalInputStyle = {
+    flex: 1,
+    minWidth: "120px",
+    padding: "12px 14px",
+    borderRadius: "14px",
+    border: "1px solid rgba(255,255,255,0.18)",
+    backgroundColor: "rgba(255,255,255,0.14)",
+    color: "#ffffff",
+    fontSize: "14px",
+    outline: "none",
+  };
+
+  const heroGoalButtonStyle = {
+    border: "none",
+    background: "#ffffff",
+    color: "#6d28d9",
+    padding: "12px 16px",
+    borderRadius: "14px",
+    cursor: "pointer",
+    fontWeight: "700",
     fontSize: "14px",
   };
 
@@ -189,28 +238,7 @@ function DashboardPage({
     marginBottom: "14px",
   };
 
-  const goalCardStyle = {
-    marginTop: "24px",
-    padding: "20px",
-    borderRadius: "22px",
-    background: "linear-gradient(135deg, #f6f0ff 0%, #fcfaff 100%)",
-    border: "1px solid #e9dcff",
-  };
-
-  const progressOuterStyle = {
-    height: "12px",
-    borderRadius: "999px",
-    backgroundColor: "#eadcff",
-    overflow: "hidden",
-    marginTop: "14px",
-  };
-
-  const progressInnerStyle = {
-    width: `${goalProgress}%`,
-    height: "100%",
-    borderRadius: "999px",
-    background: "linear-gradient(90deg, #8b5cf6 0%, #c084fc 100%)",
-  };
+  const safeGoalText = yearlyBookGoal > 0 ? yearlyBookGoal : "Not set";
 
   return (
     <div style={pageWrapStyle}>
@@ -219,10 +247,9 @@ function DashboardPage({
 
         <div style={heroGridStyle}>
           <div>
-            <h2 style={heroTitleStyle}>Welcome back to ReadTrack</h2>
+            <h2 style={heroTitleStyle}>Track Your Reading Journey</h2>
             <p style={heroTextStyle}>
-              Organize your reading habit, monitor your activity, and move toward
-              your yearly goal with a cleaner and smarter reading dashboard.
+              Set your yearly goal, manage your library, and follow your reading progress in one place.
             </p>
 
             <div style={heroBadgeWrapStyle}>
@@ -244,9 +271,25 @@ function DashboardPage({
           <div style={heroMiniCardStyle}>
             <p style={heroMiniLabelStyle}>Yearly Goal Progress</p>
             <h3 style={heroMiniValueStyle}>{goalProgress}%</h3>
-            <p style={heroMiniSubStyle}>
-              Target: {yearlyBookGoal} books this year
-            </p>
+            <p style={heroMiniSubStyle}>Target: {safeGoalText} books this year</p>
+
+            <div style={heroProgressOuterStyle}>
+              <div style={heroProgressInnerStyle} />
+            </div>
+
+            <form onSubmit={handleSaveGoal} style={heroGoalFormStyle}>
+              <input
+                type="number"
+                min="1"
+                value={goalInput}
+                onChange={(event) => setGoalInput(event.target.value)}
+                placeholder="Set yearly goal"
+                style={heroGoalInputStyle}
+              />
+              <button type="submit" style={heroGoalButtonStyle}>
+                Save
+              </button>
+            </form>
           </div>
         </div>
       </section>
@@ -312,7 +355,8 @@ function DashboardPage({
                   {session.bookTitle}
                 </strong>
                 <p style={{ margin: "8px 0 0 0", color: "#7c6a96" }}>
-                  {session.duration} minutes • {session.date}
+                  {session.duration} minutes • {session.pagesRead || 0} pages •{" "}
+                  {session.date}
                 </p>
               </div>
             ))}
@@ -352,28 +396,11 @@ function DashboardPage({
               </div>
             ))}
 
-            <div style={goalCardStyle}>
-              <h4 style={{ margin: "0 0 6px 0", color: "#24153f" }}>
-                Goal Tracker
-              </h4>
+            {recommendations.length === 0 && (
               <p style={{ margin: 0, color: "#7c6a96" }}>
-                You are progressing toward your yearly target of {yearlyBookGoal} books.
+                No recommendations available yet.
               </p>
-
-              <div style={progressOuterStyle}>
-                <div style={progressInnerStyle} />
-              </div>
-
-              <p
-                style={{
-                  margin: "12px 0 0 0",
-                  color: "#7c3aed",
-                  fontWeight: "700",
-                }}
-              >
-                {goalProgress}% completed
-              </p>
-            </div>
+            )}
           </div>
         </div>
       </section>
