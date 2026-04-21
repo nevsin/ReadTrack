@@ -25,6 +25,26 @@ function getReadingSessionsCollectionRef() {
   return collection(db, "users", uid, "readingSessions");
 }
 
+function formatSessionDate(createdAt, fallbackDate) {
+  if (!createdAt?.toDate) {
+    return fallbackDate || "Recently";
+  }
+
+  const sessionDate = createdAt.toDate();
+  const today = new Date();
+
+  const isToday =
+    sessionDate.getDate() === today.getDate() &&
+    sessionDate.getMonth() === today.getMonth() &&
+    sessionDate.getFullYear() === today.getFullYear();
+
+  if (isToday) {
+    return "Today";
+  }
+
+  return sessionDate.toLocaleDateString("en-GB");
+}
+
 export const getReadingSessions = async () => {
   const readingSessionsCollectionRef = getReadingSessionsCollectionRef();
   const q = query(readingSessionsCollectionRef, orderBy("createdAt", "desc"));
@@ -38,7 +58,7 @@ export const getReadingSessions = async () => {
       bookTitle: data.bookTitle || "",
       duration: data.duration || 0,
       pagesRead: data.pagesRead || 0,
-      date: data.date || "Recently",
+      date: formatSessionDate(data.createdAt, data.date),
       createdAt: data.createdAt || null,
     };
   });
@@ -51,7 +71,6 @@ export const addReadingSession = async (session) => {
     bookTitle: String(session.bookTitle || "").trim(),
     duration: Number(session.duration) || 0,
     pagesRead: Number(session.pagesRead) || 0,
-    date: "Today",
     createdAt: serverTimestamp(),
   };
 
@@ -60,6 +79,7 @@ export const addReadingSession = async (session) => {
   return {
     id: docRef.id,
     ...newSession,
+    date: "Today",
   };
 };
 

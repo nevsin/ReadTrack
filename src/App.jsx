@@ -273,6 +273,10 @@ function App() {
     ).length;
   }, [libraryBooks]);
 
+  const currentlyReadingCount = useMemo(() => {
+    return libraryBooks.filter((book) => book.status === "Reading").length;
+  }, [libraryBooks]);
+
   const goalEligibleBooks = useMemo(() => {
     return libraryBooks.filter((book) => book.status === "Completed").length;
   }, [libraryBooks]);
@@ -294,9 +298,9 @@ function App() {
 
   const stats = [
     {
-      title: "Books Read",
-      value: String(booksRead),
-      icon: statIcons.books,
+      title: "Currently Reading",
+      value: String(currentlyReadingCount),
+      icon: statIcons.goal,
     },
     {
       title: "Reading Time",
@@ -304,9 +308,9 @@ function App() {
       icon: statIcons.time,
     },
     {
-      title: "Goal Progress",
-      value: `${goalProgress}%`,
-      icon: statIcons.goal,
+      title: "Completed Books",
+      value: String(booksRead),
+      icon: statIcons.books,
     },
   ];
 
@@ -479,7 +483,7 @@ function App() {
       const response = await fetch(
         `https://www.googleapis.com/books/v1/volumes?q=${encodeURIComponent(
           searchTerm
-        )}&maxResults=6&key=${GOOGLE_BOOKS_API_KEY}`
+        )}&maxResults=15&key=${GOOGLE_BOOKS_API_KEY}`
       );
 
       if (!response.ok) {

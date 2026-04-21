@@ -231,11 +231,11 @@ function DashboardPage({
   };
 
   const recommendationItemStyle = {
-    padding: "16px",
+    padding: "14px 16px",
     borderRadius: "18px",
     background: "#fbf8ff",
     border: "1px solid #eee5fb",
-    marginBottom: "14px",
+    marginBottom: "12px",
   };
 
   const safeGoalText = yearlyBookGoal > 0 ? yearlyBookGoal : "Not set";
@@ -249,7 +249,8 @@ function DashboardPage({
           <div>
             <h2 style={heroTitleStyle}>Track Your Reading Journey</h2>
             <p style={heroTextStyle}>
-              Set your yearly goal, manage your library, and follow your reading progress in one place.
+              Set your yearly goal, manage your library, and follow your reading
+              progress in one place.
             </p>
 
             <div style={heroBadgeWrapStyle}>
@@ -380,18 +381,20 @@ function DashboardPage({
               </div>
             </div>
 
-            {recommendations.slice(0, 3).map((recommendation) => (
+            {recommendations.slice(0, 5).map((recommendation) => (
               <div key={recommendation.id} style={recommendationItemStyle}>
-                <strong style={{ color: "#24153f" }}>{recommendation.title}</strong>
+                <strong style={{ color: "#24153f", display: "block" }}>
+                  {recommendation.title}
+                </strong>
                 <p
                   style={{
                     margin: "8px 0 0 0",
                     color: "#7c6a96",
-                    lineHeight: "1.6",
+                    lineHeight: "1.5",
                     fontSize: "14px",
                   }}
                 >
-                  {recommendation.reason}
+                  {recommendation.author}
                 </p>
               </div>
             ))}

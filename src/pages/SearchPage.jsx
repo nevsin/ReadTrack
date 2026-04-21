@@ -36,7 +36,8 @@ function SearchPage({
   };
 
   const cardStyle = {
-    background: "linear-gradient(180deg, rgba(255,255,255,0.94) 0%, rgba(250,247,255,0.98) 100%)",
+    background:
+      "linear-gradient(180deg, rgba(255,255,255,0.94) 0%, rgba(250,247,255,0.98) 100%)",
     borderRadius: "26px",
     padding: "28px",
     border: "1px solid #eee5fb",
@@ -73,10 +74,11 @@ function SearchPage({
     cursor: "pointer",
     height: "50px",
     boxShadow: "0 12px 24px rgba(139, 92, 246, 0.22)",
+    minWidth: "120px",
   };
 
   const addButtonStyle = {
-    alignSelf: "flex-start",
+    marginTop: "auto",
     border: "none",
     background: "linear-gradient(135deg, #f3ecff 0%, #eadcff 100%)",
     color: "#7c3aed",
@@ -84,6 +86,39 @@ function SearchPage({
     borderRadius: "12px",
     cursor: "pointer",
     fontWeight: "700",
+    fontSize: "14px",
+  };
+
+  const resultMetaStyle = {
+    margin: "0 0 18px 0",
+    color: "#7c6a96",
+    fontSize: "14px",
+    fontWeight: "600",
+  };
+
+  const coverWrapStyle = {
+    width: "100%",
+    aspectRatio: "3 / 4",
+    borderRadius: "14px",
+    overflow: "hidden",
+    background: "#f3eefb",
+    border: "1px solid #eee5fb",
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+  };
+
+  const coverStyle = {
+    width: "100%",
+    height: "100%",
+    objectFit: "cover",
+    display: "block",
+  };
+
+  const placeholderStyle = {
+    color: "#9a88b3",
+    fontWeight: "700",
+    fontSize: "20px",
   };
 
   return (
@@ -91,7 +126,8 @@ function SearchPage({
       <div style={headerStyle}>
         <h2 style={titleStyle}>Book Search</h2>
         <p style={subtitleStyle}>
-          Search books with Google Books API and add the ones you like to your library.
+          Search books with Google Books API and add the ones you like to your
+          library.
         </p>
       </div>
 
@@ -102,7 +138,7 @@ function SearchPage({
             gap: "14px",
             flexWrap: "wrap",
             alignItems: "end",
-            marginBottom: "24px",
+            marginBottom: "22px",
           }}
         >
           <div style={{ flex: 1, minWidth: "260px" }}>
@@ -117,7 +153,7 @@ function SearchPage({
                   handleSearchBooks();
                 }
               }}
-              placeholder="Search by title"
+              placeholder="Search by title, author, or keyword"
               style={inputStyle}
             />
           </div>
@@ -128,17 +164,25 @@ function SearchPage({
         </div>
 
         {isSearching && (
-          <p style={{ color: "#7c6a96", marginBottom: "16px" }}>Searching books...</p>
+          <p style={{ color: "#7c6a96", marginBottom: "16px" }}>
+            Searching books...
+          </p>
         )}
 
         {searchError && (
-          <p style={{ color: "#be185d", marginBottom: "16px" }}>{searchError}</p>
+          <p style={{ color: "#be185d", marginBottom: "16px" }}>
+            {searchError}
+          </p>
+        )}
+
+        {!isSearching && !searchError && searchResults.length > 0 && (
+          <p style={resultMetaStyle}>{searchResults.length} results found</p>
         )}
 
         <div
           style={{
             display: "grid",
-            gridTemplateColumns: "repeat(auto-fit, minmax(230px, 1fr))",
+            gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))",
             gap: "18px",
           }}
         >
@@ -148,37 +192,61 @@ function SearchPage({
               style={{
                 border: "1px solid #eee5fb",
                 borderRadius: "20px",
-                padding: "18px",
+                padding: "16px",
                 background: "linear-gradient(180deg, #fcfbff 0%, #f8f3ff 100%)",
                 display: "flex",
                 flexDirection: "column",
-                gap: "14px",
+                gap: "12px",
                 boxShadow: "0 10px 24px rgba(76, 29, 149, 0.04)",
+                minHeight: "100%",
               }}
             >
-              <img
-                src={book.cover}
-                alt={book.title}
-                style={{
-                  width: "100%",
-                  height: "240px",
-                  objectFit: "cover",
-                  borderRadius: "14px",
-                }}
-              />
+              <div style={coverWrapStyle}>
+                {book.cover &&
+                !String(book.cover).includes("placehold.co") &&
+                !String(book.cover).includes("No+Cover") ? (
+                  <img src={book.cover} alt={book.title} style={coverStyle} />
+                ) : (
+                  <div style={placeholderStyle}>No Cover</div>
+                )}
+              </div>
 
-              <div>
+              <div
+                style={{
+                  display: "flex",
+                  flexDirection: "column",
+                  gap: "6px",
+                  minHeight: "74px",
+                }}
+              >
                 <h4
                   style={{
-                    margin: "0 0 8px 0",
-                    fontSize: "18px",
+                    margin: 0,
+                    fontSize: "17px",
                     color: "#24153f",
+                    lineHeight: "1.35",
+                    display: "-webkit-box",
+                    WebkitLineClamp: 2,
+                    WebkitBoxOrient: "vertical",
+                    overflow: "hidden",
+                    minHeight: "46px",
                   }}
                 >
                   {book.title}
                 </h4>
 
-                <p style={{ margin: 0, color: "#7c6a96", lineHeight: "1.5" }}>
+                <p
+                  style={{
+                    margin: 0,
+                    color: "#7c6a96",
+                    lineHeight: "1.5",
+                    fontSize: "14px",
+                    display: "-webkit-box",
+                    WebkitLineClamp: 1,
+                    WebkitBoxOrient: "vertical",
+                    overflow: "hidden",
+                  }}
+                >
                   {book.author}
                 </p>
               </div>

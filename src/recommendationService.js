@@ -1,8 +1,9 @@
 import { GOOGLE_BOOKS_API_KEY } from "./config";
 
-const MAX_RECOMMENDATIONS = 12;
-const MAX_PER_AUTHOR = 2;
-const MAX_SEED_BOOKS = 6;
+const MAX_RECOMMENDATIONS = 20;
+const MIN_RECOMMENDATIONS = 15;
+const MAX_PER_AUTHOR = 3;
+const MAX_SEED_BOOKS = 8;
 
 function safeArray(value) {
   return Array.isArray(value) ? value : [];
@@ -47,19 +48,34 @@ function normalizeThumbnailUrl(url) {
   return String(url).replace(/^http:\/\//i, "https://");
 }
 
-function isPriorityStatus(status) {
-  const normalizedStatus = normalize(status);
-  return normalizedStatus === "completed" || normalizedStatus === "reading";
+function normalizeStatus(status) {
+  const value = normalize(status);
+
+  if (value === "completed before this year") {
+    return "completed_before_this_year";
+  }
+
+  if (value === "completed") return "completed";
+  if (value === "reading") return "reading";
+  return "want_to_read";
 }
 
 function statusWeight(status) {
-  const normalizedStatus = normalize(status);
+  const normalizedStatus = normalizeStatus(status);
 
-  if (normalizedStatus === "completed") return 3;
-  if (normalizedStatus === "reading") return 2;
-  if (normalizedStatus === "want to read") return 1;
-
+  if (normalizedStatus === "completed") return 4;
+  if (normalizedStatus === "reading") return 3;
+  if (normalizedStatus === "completed_before_this_year") return 2;
   return 1;
+}
+
+function isPriorityStatus(status) {
+  const normalizedStatus = normalizeStatus(status);
+  return (
+    normalizedStatus === "completed" ||
+    normalizedStatus === "reading" ||
+    normalizedStatus === "completed_before_this_year"
+  );
 }
 
 function mapGoogleBook(item) {
@@ -184,9 +200,9 @@ function looksBadCandidate(book) {
   const author = normalize(getPrimaryAuthor(book));
 
   if (!title) return true;
-  if (title.includes("dergi")) return true;
   if (title.includes("journal")) return true;
   if (title.includes("magazine")) return true;
+  if (title.includes("dergi")) return true;
   if (author === "unknown author") return true;
 
   return false;
@@ -254,6 +270,50 @@ async function enrichLibraryBooks(libraryBooks = []) {
   return enrichedBooks;
 }
 
+function buildUserProfile(libraryBooks = []) {
+  const profile = {
+    totalWeight: 0,
+    categories: {},
+    authors: {},
+    languages: {},
+    statuses: {},
+    topBooks: [],
+  };
+
+  libraryBooks.forEach((book) => {
+    const weight = statusWeight(book?.status);
+    const author = normalize(getPrimaryAuthor(book));
+    const language = normalize(book?.language);
+    const categories = getNormalizedCategories(book);
+    const status = normalizeStatus(book?.status);
+
+    profile.totalWeight += weight;
+    profile.statuses[status] = (profile.statuses[status] || 0) + weight;
+
+    if (author) {
+      profile.authors[author] = (profile.authors[author] || 0) + weight;
+    }
+
+    if (language) {
+      profile.languages[language] = (profile.languages[language] || 0) + weight;
+    }
+
+    categories.forEach((category) => {
+      if (!category) return;
+      profile.categories[category] = (profile.categories[category] || 0) + weight;
+    });
+
+    profile.topBooks.push({
+      ...book,
+      _weight: weight,
+    });
+  });
+
+  profile.topBooks.sort((a, b) => b._weight - a._weight);
+
+  return profile;
+}
+
 function pickSeedBooks(libraryBooks = []) {
   const prioritized =
     libraryBooks.filter((book) => isPriorityStatus(book?.status)).length > 0
@@ -265,10 +325,15 @@ function pickSeedBooks(libraryBooks = []) {
     .slice(0, MAX_SEED_BOOKS);
 }
 
-function buildSeedQueries(seedBook) {
+function buildSeedQueries(seedBook, profile) {
   const author = getPrimaryAuthor(seedBook);
   const language = normalize(seedBook?.language);
   const categories = getNormalizedCategories(seedBook);
+
+  const topProfileCategories = Object.entries(profile.categories)
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 2)
+    .map(([category]) => category);
 
   const queries = [];
 
@@ -296,7 +361,43 @@ function buildSeedQueries(seedBook) {
     }
   });
 
+  topProfileCategories.forEach((category) => {
+    queries.push({
+      query: `subject:"${category}"`,
+      lang: language,
+      seedBook,
+    });
+  });
+
   return queries;
+}
+
+function scoreCandidateAgainstProfile(candidate, profile) {
+  let score = 0;
+
+  const candidateAuthor = normalize(getPrimaryAuthor(candidate));
+  const candidateLanguage = normalize(candidate?.language);
+  const candidateCategories = getNormalizedCategories(candidate);
+
+  if (candidateAuthor && profile.authors[candidateAuthor]) {
+    score += profile.authors[candidateAuthor] * 1.8;
+  }
+
+  candidateCategories.forEach((category) => {
+    if (profile.categories[category]) {
+      score += profile.categories[category] * 2.2;
+    }
+  });
+
+  if (candidateLanguage && profile.languages[candidateLanguage]) {
+    score += profile.languages[candidateLanguage] * 1.2;
+  }
+
+  if (candidate.thumbnail) score += 1;
+  if (candidate.description) score += 1;
+  if (candidate.pageCount) score += 0.5;
+
+  return score;
 }
 
 function scoreCandidateAgainstSeed(candidate, seedBook) {
@@ -312,12 +413,12 @@ function scoreCandidateAgainstSeed(candidate, seedBook) {
   const seedLanguage = normalize(seedBook?.language);
 
   if (candidateAuthor && seedAuthor && candidateAuthor === seedAuthor) {
-    score += 12;
+    score += 9;
   }
 
   seedCategories.forEach((category) => {
     if (category && candidateCategories.includes(category)) {
-      score += 6;
+      score += 8;
     }
   });
 
@@ -325,52 +426,54 @@ function scoreCandidateAgainstSeed(candidate, seedBook) {
     score += 3;
   }
 
-  if (candidate.thumbnail) score += 1;
-  if (candidate.description) score += 1;
-
   return score;
 }
 
-function buildReasonFromSeed(candidate, seedBook) {
+function buildReason(candidate, seedBook, profile) {
   const candidateAuthor = normalize(getPrimaryAuthor(candidate));
   const seedAuthor = normalize(getPrimaryAuthor(seedBook));
+  const candidateCategories = getNormalizedCategories(candidate);
 
-  if (candidateAuthor && seedAuthor && candidateAuthor === seedAuthor) {
-    return `Suggested because it matches an author in your library: ${getPrimaryAuthor(
-      seedBook
-    )}.`;
-  }
+  const sortedProfileCategories = Object.entries(profile.categories)
+    .sort((a, b) => b[1] - a[1])
+    .map(([category]) => category);
 
-  const candidateCategories = getCategories(candidate);
-  const seedCategories = getNormalizedCategories(seedBook);
-
-  const matchedCategory = seedCategories.find((category) =>
-    getNormalizedCategories(candidate).includes(category)
+  const matchedProfileCategory = sortedProfileCategories.find((category) =>
+    candidateCategories.includes(category)
   );
 
-  if (matchedCategory) {
+  if (matchedProfileCategory) {
     const displayCategory =
-      candidateCategories.find(
+      getCategories(candidate).find(
         (category) =>
-          normalize(getMainCategory(category)) === matchedCategory
-      ) || matchedCategory;
+          normalize(getMainCategory(category)) === matchedProfileCategory
+      ) || matchedProfileCategory;
 
-    return `Suggested because it matches your reading category: ${getMainCategory(
+    return `Suggested because it matches your preferred category: ${getMainCategory(
       displayCategory
     )}.`;
   }
 
-  return `Suggested because it is similar to ${getBookTitle(seedBook)}.`;
+  if (candidateAuthor && seedAuthor && candidateAuthor === seedAuthor) {
+    return `Suggested because it matches an author in your reading profile: ${getPrimaryAuthor(
+      seedBook
+    )}.`;
+  }
+
+  return `Suggested because it is similar to ${getBookTitle(seedBook)} in your library.`;
 }
 
-async function collectCandidates(seedBooks, libraryBooks) {
-  const queryConfigs = seedBooks.flatMap(buildSeedQueries);
-
-  const settledResults = await Promise.allSettled(
-    queryConfigs.map((config) => fetchBooks(config.query, 8, config.lang))
+async function collectCandidates(seedBooks, libraryBooks, profile) {
+  const queryConfigs = seedBooks.flatMap((seedBook) =>
+    buildSeedQueries(seedBook, profile)
   );
 
-  let collected = [];
+  const settledResults = await Promise.allSettled(
+    queryConfigs.map((config) => fetchBooks(config.query, 10, config.lang))
+  );
+
+  let strongCandidates = [];
+  let backupCandidates = [];
 
   settledResults.forEach((result, index) => {
     if (result.status !== "fulfilled") return;
@@ -382,24 +485,56 @@ async function collectCandidates(seedBooks, libraryBooks) {
       if (isSameAsLibraryBook(candidate, libraryBooks)) return;
       if (looksBadCandidate(candidate)) return;
 
-      const score = scoreCandidateAgainstSeed(candidate, seedBook);
+      const seedScore = scoreCandidateAgainstSeed(candidate, seedBook);
+      const profileScore = scoreCandidateAgainstProfile(candidate, profile);
+      const finalScore = seedScore + profileScore;
 
-      if (score < 6) return;
-
-      collected.push({
+      const preparedCandidate = {
         ...candidate,
-        score,
-        reason: buildReasonFromSeed(candidate, seedBook),
-      });
+        score: finalScore,
+        reason: buildReason(candidate, seedBook, profile),
+      };
+
+      if (finalScore >= 7) {
+        strongCandidates.push(preparedCandidate);
+      } else if (finalScore >= 4) {
+        backupCandidates.push(preparedCandidate);
+      }
     });
   });
 
-  collected = dedupeByTitleAndAuthor(collected)
-    .sort((a, b) => (b.score || 0) - (a.score || 0));
+  strongCandidates = dedupeByTitleAndAuthor(strongCandidates).sort(
+    (a, b) => (b.score || 0) - (a.score || 0)
+  );
 
-  collected = applyAuthorBalance(collected, MAX_PER_AUTHOR);
+  backupCandidates = dedupeByTitleAndAuthor(backupCandidates).sort(
+    (a, b) => (b.score || 0) - (a.score || 0)
+  );
 
-  return collected;
+  let combined = applyAuthorBalance(strongCandidates, MAX_PER_AUTHOR);
+
+  if (combined.length < MIN_RECOMMENDATIONS) {
+    const existingKeys = new Set(
+      combined.map(
+        (book) =>
+          `${normalize(getBookTitle(book))}::${normalize(getPrimaryAuthor(book))}`
+      )
+    );
+
+    const fillerBooks = backupCandidates.filter((book) => {
+      const key = `${normalize(getBookTitle(book))}::${normalize(
+        getPrimaryAuthor(book)
+      )}`;
+      return !existingKeys.has(key);
+    });
+
+    combined = applyAuthorBalance(
+      [...combined, ...fillerBooks],
+      MAX_PER_AUTHOR
+    );
+  }
+
+  return combined.slice(0, MAX_RECOMMENDATIONS);
 }
 
 export async function getPersonalizedRecommendations(libraryBooks = []) {
@@ -412,13 +547,14 @@ export async function getPersonalizedRecommendations(libraryBooks = []) {
   }
 
   const enrichedLibrary = await enrichLibraryBooks(cleanLibrary);
+  const profile = buildUserProfile(enrichedLibrary);
   const seedBooks = pickSeedBooks(enrichedLibrary);
 
   if (!seedBooks.length) {
     return [];
   }
 
-  const results = await collectCandidates(seedBooks, enrichedLibrary);
+  const results = await collectCandidates(seedBooks, enrichedLibrary, profile);
 
   return results.slice(0, MAX_RECOMMENDATIONS);
 }

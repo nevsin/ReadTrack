@@ -117,6 +117,24 @@ function LibraryPage({
     return "linear-gradient(90deg, #d8b4fe 0%, #e9d5ff 100%)";
   }
 
+  function getStatusOrder(status) {
+    if (status === "Reading") return 1;
+    if (status === "Want to Read") return 2;
+    if (status === "Completed") return 3;
+    if (status === "Completed Before This Year") return 4;
+    return 5;
+  }
+
+  const sortedLibraryBooks = [...libraryBooks].sort((a, b) => {
+    const statusDifference = getStatusOrder(a.status) - getStatusOrder(b.status);
+
+    if (statusDifference !== 0) {
+      return statusDifference;
+    }
+
+    return a.title.localeCompare(b.title, "tr");
+  });
+
   return (
     <div style={pageWrapStyle}>
       <div style={headerStyle}>
@@ -188,7 +206,7 @@ function LibraryPage({
             gap: "18px",
           }}
         >
-          {libraryBooks.map((book) => (
+          {sortedLibraryBooks.map((book) => (
             <div
               key={book.id}
               style={{
@@ -277,7 +295,7 @@ function LibraryPage({
           ))}
         </div>
 
-        {libraryBooks.length === 0 && (
+        {sortedLibraryBooks.length === 0 && (
           <p style={{ marginTop: "20px", color: "#7c6a96" }}>
             No books in your library yet.
           </p>

@@ -85,7 +85,6 @@ function ReadTrackLogo({ size = 72, showText = true, stacked = false }) {
       {showText && (
         <div>
           <h1 style={titleStyle}>ReadTrack</h1>
-          <p style={subtitleStyle}>AI-Based Reading Habit Tracker</p>
         </div>
       )}
     </div>
