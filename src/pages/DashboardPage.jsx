@@ -1,10 +1,9 @@
-import StatCard from "../components/StatCard";
 import {
-  FiArrowUpRight,
-  FiBook,
-  FiTarget,
-  FiClock,
+  FiAward,
+  FiBookOpen,
+  FiCheckCircle,
   FiStar,
+  FiTrendingUp,
 } from "react-icons/fi";
 
 function DashboardPage({
@@ -13,394 +12,257 @@ function DashboardPage({
   recommendations,
   yearlyBookGoal,
   goalProgress,
-  sessionsLoading,
   goalInput,
   setGoalInput,
   handleSaveGoal,
 }) {
-  const pageWrapStyle = {
-    display: "flex",
-    flexDirection: "column",
-    gap: "24px",
-  };
+  const theme = lightTheme;
 
-  const heroStyle = {
-    background: "linear-gradient(135deg, #2a1647 0%, #5b21b6 55%, #a855f7 100%)",
-    borderRadius: "30px",
-    padding: "32px",
-    color: "white",
-    boxShadow: "0 20px 45px rgba(91, 33, 182, 0.22)",
-    position: "relative",
-    overflow: "hidden",
-  };
+  const safeStats = stats || [];
+  const safeSessions = recentSessions || [];
+  const safeRecommendations = recommendations || [];
 
-  const heroGlowStyle = {
-    position: "absolute",
-    right: "-80px",
-    top: "-80px",
-    width: "240px",
-    height: "240px",
-    borderRadius: "999px",
-    background: "rgba(255,255,255,0.12)",
-    filter: "blur(10px)",
-  };
+  const completedStat = safeStats.find((stat) =>
+    stat.title.toLowerCase().includes("completed")
+  );
 
-  const heroGridStyle = {
-    display: "flex",
-    justifyContent: "space-between",
-    alignItems: "flex-start",
-    gap: "20px",
-    flexWrap: "wrap",
-    position: "relative",
-    zIndex: 1,
-  };
+  const currentlyReadingStat = safeStats.find((stat) =>
+    stat.title.toLowerCase().includes("currently")
+  );
 
-  const heroTitleStyle = {
-    margin: "0 0 10px 0",
-    fontSize: "38px",
-    fontWeight: "800",
-    letterSpacing: "-0.03em",
-  };
+  const completedBooks = Number(completedStat?.value || 0);
+  const currentlyReading = Number(currentlyReadingStat?.value || 0);
 
-  const heroTextStyle = {
-    margin: 0,
-    maxWidth: "640px",
-    color: "rgba(255,255,255,0.84)",
-    fontSize: "16px",
-    lineHeight: "1.7",
-  };
+  const remainingBooks =
+    yearlyBookGoal > 0 ? Math.max(yearlyBookGoal - completedBooks, 0) : 0;
 
-  const heroBadgeWrapStyle = {
-    display: "flex",
-    gap: "12px",
-    flexWrap: "wrap",
-    marginTop: "22px",
-  };
+  const readingStreak = calculateReadingStreak(safeSessions);
 
-  const heroBadgeStyle = {
-    display: "flex",
-    alignItems: "center",
-    gap: "8px",
-    padding: "10px 14px",
-    borderRadius: "999px",
-    backgroundColor: "rgba(255,255,255,0.12)",
-    border: "1px solid rgba(255,255,255,0.16)",
-    fontWeight: "600",
-    fontSize: "14px",
-  };
+  const recentReadingSessions = safeSessions
+    .filter((session) => String(session.bookTitle || "").trim())
+    .map((session) => ({
+      title: session.bookTitle,
+      pagesRead: Number(session.pagesRead || 0),
+      duration: Number(session.duration || 0),
+      date: session.date || "Recently",
+    }))
+    .slice(0, 3);
 
-  const heroMiniCardStyle = {
-    width: "300px",
-    maxWidth: "100%",
-    backgroundColor: "rgba(255,255,255,0.12)",
-    border: "1px solid rgba(255,255,255,0.16)",
-    borderRadius: "22px",
-    padding: "20px",
-    backdropFilter: "blur(8px)",
-  };
+  const dashboardRecommendations = safeRecommendations
+    .filter((book) => String(book.title || "").trim())
+    .slice(0, 3);
 
-  const heroMiniLabelStyle = {
-    margin: "0 0 8px 0",
-    fontSize: "13px",
-    color: "rgba(255,255,255,0.75)",
-  };
-
-  const heroMiniValueStyle = {
-    margin: 0,
-    fontSize: "34px",
-    fontWeight: "800",
-  };
-
-  const heroMiniSubStyle = {
-    marginTop: "8px",
-    marginBottom: 0,
-    color: "rgba(255,255,255,0.75)",
-    fontSize: "14px",
-  };
-
-  const heroProgressOuterStyle = {
-    height: "10px",
-    borderRadius: "999px",
-    backgroundColor: "rgba(255,255,255,0.18)",
-    overflow: "hidden",
-    marginTop: "16px",
-  };
-
-  const heroProgressInnerStyle = {
-    width: `${goalProgress}%`,
-    height: "100%",
-    borderRadius: "999px",
-    background: "linear-gradient(90deg, #ffffff 0%, #f5d0fe 100%)",
-  };
-
-  const heroGoalFormStyle = {
-    display: "flex",
-    gap: "10px",
-    marginTop: "16px",
-    flexWrap: "wrap",
-  };
-
-  const heroGoalInputStyle = {
-    flex: 1,
-    minWidth: "120px",
-    padding: "12px 14px",
-    borderRadius: "14px",
-    border: "1px solid rgba(255,255,255,0.18)",
-    backgroundColor: "rgba(255,255,255,0.14)",
-    color: "#ffffff",
-    fontSize: "14px",
-    outline: "none",
-  };
-
-  const heroGoalButtonStyle = {
-    border: "none",
-    background: "#ffffff",
-    color: "#6d28d9",
-    padding: "12px 16px",
-    borderRadius: "14px",
-    cursor: "pointer",
-    fontWeight: "700",
-    fontSize: "14px",
-  };
-
-  const sectionTitleStyle = {
-    margin: 0,
-    fontSize: "30px",
-    color: "#24153f",
-    fontWeight: "800",
-    letterSpacing: "-0.03em",
-  };
-
-  const sectionTextStyle = {
-    margin: "8px 0 0 0",
-    color: "#7c6a96",
-    fontSize: "15px",
-    lineHeight: "1.6",
-  };
-
-  const gridStyle = {
-    display: "grid",
-    gridTemplateColumns: "2fr 1fr",
-    gap: "24px",
-  };
-
-  const cardStyle = {
-    backgroundColor: "rgba(255,255,255,0.82)",
-    backdropFilter: "blur(8px)",
-    borderRadius: "28px",
-    padding: "26px",
-    border: "1px solid #eee5fb",
-    boxShadow: "0 18px 40px rgba(76, 29, 149, 0.06)",
-  };
-
-  const cardHeaderStyle = {
-    display: "flex",
-    justifyContent: "space-between",
-    alignItems: "center",
-    gap: "12px",
-    marginBottom: "18px",
-  };
-
-  const cardTitleStyle = {
-    margin: 0,
-    fontSize: "22px",
-    color: "#24153f",
-    fontWeight: "800",
-  };
-
-  const cardSubStyle = {
-    margin: "6px 0 0 0",
-    color: "#7c6a96",
-    fontSize: "14px",
-  };
-
-  const iconBoxStyle = {
-    width: "42px",
-    height: "42px",
-    borderRadius: "14px",
-    background: "linear-gradient(135deg, #f3ecff 0%, #e9dcff 100%)",
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "center",
-    color: "#7c3aed",
-  };
-
-  const sessionItemStyle = {
-    padding: "16px 0",
-    borderBottom: "1px solid #eee5fb",
-  };
-
-  const recommendationItemStyle = {
-    padding: "14px 16px",
-    borderRadius: "18px",
-    background: "#fbf8ff",
-    border: "1px solid #eee5fb",
-    marginBottom: "12px",
-  };
-
-  const safeGoalText = yearlyBookGoal > 0 ? yearlyBookGoal : "Not set";
+  const metricCards = [
+    {
+      label: "Currently Reading",
+      value: currentlyReading,
+      icon: <FiBookOpen />,
+      tone: "purple",
+    },
+    {
+      label: "Completed",
+      value: completedBooks,
+      icon: <FiCheckCircle />,
+      tone: "green",
+    },
+    {
+      label: "Reading Streak",
+      value: `${readingStreak} day${readingStreak === 1 ? "" : "s"}`,
+      icon: <FiTrendingUp />,
+      tone: "amber",
+    },
+  ];
 
   return (
-    <div style={pageWrapStyle}>
-      <section style={heroStyle}>
-        <div style={heroGlowStyle} />
+    <div style={{ ...styles.page, background: theme.pageBg, color: theme.text }}>
+      <div style={styles.topBar}>
+        <div>
+          <p style={{ ...styles.pageEyebrow, color: theme.muted }}>
+            Dashboard Overview
+          </p>
 
-        <div style={heroGridStyle}>
-          <div>
-            <h2 style={heroTitleStyle}>Track Your Reading Journey</h2>
-            <p style={heroTextStyle}>
-              Set your yearly goal, manage your library, and follow your reading
-              progress in one place.
+          <h2 style={{ ...styles.pageTitle, color: theme.text }}>
+            Reading progress summary
+          </h2>
+        </div>
+      </div>
+
+      <section style={styles.headerGrid}>
+        <div style={styles.hero}>
+          <div style={styles.heroContent}>
+            <p style={styles.heroEyebrow}>Reading Dashboard</p>
+
+            <h1 style={styles.heroTitle}>
+              Your reading progress, clearly organized.
+            </h1>
+
+            <p style={styles.heroText}>
+              View your yearly goal, completed books, and recent reading
+              activity in one simple dashboard.
             </p>
-
-            <div style={heroBadgeWrapStyle}>
-              <div style={heroBadgeStyle}>
-                <FiBook />
-                Reading Tracking
-              </div>
-              <div style={heroBadgeStyle}>
-                <FiTarget />
-                Goal Progress
-              </div>
-              <div style={heroBadgeStyle}>
-                <FiClock />
-                Session History
-              </div>
-            </div>
           </div>
 
-          <div style={heroMiniCardStyle}>
-            <p style={heroMiniLabelStyle}>Yearly Goal Progress</p>
-            <h3 style={heroMiniValueStyle}>{goalProgress}%</h3>
-            <p style={heroMiniSubStyle}>Target: {safeGoalText} books this year</p>
-
-            <div style={heroProgressOuterStyle}>
-              <div style={heroProgressInnerStyle} />
-            </div>
-
-            <form onSubmit={handleSaveGoal} style={heroGoalFormStyle}>
-              <input
-                type="number"
-                min="1"
-                value={goalInput}
-                onChange={(event) => setGoalInput(event.target.value)}
-                placeholder="Set yearly goal"
-                style={heroGoalInputStyle}
-              />
-              <button type="submit" style={heroGoalButtonStyle}>
-                Save
-              </button>
-            </form>
+          <div style={styles.heroDecoration}>
+            <div style={styles.floatingBookOne} />
+            <div style={styles.floatingBookTwo} />
+            <div style={styles.floatingBookThree} />
           </div>
         </div>
-      </section>
-
-      <section>
-        <h2 style={sectionTitleStyle}>Overview</h2>
-        <p style={sectionTextStyle}>
-          A quick snapshot of your reading activity and current progress.
-        </p>
 
         <div
           style={{
-            display: "flex",
-            gap: "20px",
-            marginTop: "20px",
-            flexWrap: "wrap",
+            ...styles.goalPanel,
+            backgroundColor: theme.cardBg,
+            border: `1px solid ${theme.border}`,
+            boxShadow: theme.cardShadow,
           }}
         >
-          {stats.map((stat) => (
-            <StatCard
-              key={stat.title}
-              title={stat.title}
-              value={stat.value}
-              icon={stat.icon}
-            />
-          ))}
-        </div>
-      </section>
-
-      <section style={gridStyle}>
-        <div style={cardStyle}>
-          <div style={cardHeaderStyle}>
+          <div style={styles.panelTop}>
             <div>
-              <h3 style={cardTitleStyle}>Recent Reading Sessions</h3>
-              <p style={cardSubStyle}>
-                Your latest reading activity at a glance
-              </p>
+              <p style={styles.kicker}>Yearly goal</p>
+
+              <h2 style={{ ...styles.panelTitle, color: theme.text }}>
+                Progress
+              </h2>
             </div>
-            <div style={iconBoxStyle}>
-              <FiArrowUpRight size={18} />
+
+            <span style={styles.iconCircle}>
+              <FiAward />
+            </span>
+          </div>
+
+          <div style={styles.goalVisualWrap}>
+            <div
+              style={{
+                ...styles.goalRing,
+                background: `conic-gradient(#7c3aed ${
+                  goalProgress * 3.6
+                }deg, #ede9fe 0deg)`,
+              }}
+            >
+              <div
+                style={{
+                  ...styles.goalRingInner,
+                  backgroundColor: theme.cardBg,
+                  boxShadow: `inset 0 0 0 1px ${theme.border}`,
+                }}
+              >
+                <FiAward style={styles.goalCupIcon} />
+
+                <strong style={{ color: theme.text }}>{goalProgress}%</strong>
+
+                <span style={{ color: theme.muted }}>complete</span>
+              </div>
             </div>
           </div>
 
-          {sessionsLoading && (
-            <p style={{ margin: 0, color: "#7c6a96" }}>
-              Loading reading sessions...
-            </p>
-          )}
+          <p style={{ ...styles.goalText, color: theme.muted }}>
+            <strong style={{ color: theme.text }}>{completedBooks}</strong> of{" "}
+            <strong style={{ color: theme.text }}>
+              {yearlyBookGoal || "not set"}
+            </strong>{" "}
+            books completed.
+            {yearlyBookGoal > 0 && <> {remainingBooks} books remaining.</>}
+          </p>
 
-          {!sessionsLoading &&
-            recentSessions.slice(0, 4).map((session, index) => (
+          <form onSubmit={handleSaveGoal} style={styles.goalForm}>
+            <input
+              type="number"
+              min="1"
+              value={goalInput}
+              onChange={(event) => setGoalInput(event.target.value)}
+              placeholder="Set goal"
+              style={{
+                ...styles.goalInput,
+                backgroundColor: theme.inputBg,
+                border: `1px solid ${theme.border}`,
+                color: theme.text,
+              }}
+            />
+
+            <button type="submit" style={styles.saveButton}>
+              Save
+            </button>
+          </form>
+        </div>
+      </section>
+
+      <section style={styles.metricGrid}>
+        {metricCards.map((metric) => (
+          <MetricCard key={metric.label} metric={metric} theme={theme} />
+        ))}
+      </section>
+
+      <section style={styles.bottomGrid}>
+        <div
+          style={{
+            ...styles.bottomCard,
+            backgroundColor: theme.cardBg,
+            border: `1px solid ${theme.border}`,
+            boxShadow: theme.cardShadow,
+          }}
+        >
+          <SectionHeader
+            icon={<FiBookOpen />}
+            title="Recent Reading Sessions"
+            subtitle="Latest reading activity at a glance"
+            theme={theme}
+          />
+
+          <div style={styles.sessionList}>
+            {recentReadingSessions.map((session, index) => (
               <div
-                key={session.id}
-                style={{
-                  ...sessionItemStyle,
-                  borderBottom:
-                    index === Math.min(recentSessions.length, 4) - 1
-                      ? "none"
-                      : "1px solid #eee5fb",
-                }}
+                key={`${session.title}-${session.date}-${index}`}
+                style={styles.sessionRow}
               >
-                <strong style={{ color: "#24153f", fontSize: "16px" }}>
-                  {session.bookTitle}
-                </strong>
-                <p style={{ margin: "8px 0 0 0", color: "#7c6a96" }}>
-                  {session.duration} minutes • {session.pagesRead || 0} pages •{" "}
+                <strong style={{ color: theme.text }}>{session.title}</strong>
+
+                <span style={{ color: theme.muted }}>
+                  {session.duration} minutes • {session.pagesRead} pages •{" "}
                   {session.date}
-                </p>
+                </span>
               </div>
             ))}
 
-          {!sessionsLoading && recentSessions.length === 0 && (
-            <p style={{ margin: 0, color: "#7c6a96" }}>
-              No reading sessions yet.
-            </p>
-          )}
+            {recentReadingSessions.length === 0 && (
+              <p style={{ ...styles.emptyText, color: theme.muted }}>
+                No reading sessions recorded yet.
+              </p>
+            )}
+          </div>
         </div>
 
-        <div>
-          <div style={cardStyle}>
-            <div style={cardHeaderStyle}>
-              <div>
-                <h3 style={cardTitleStyle}>Recommendations</h3>
-                <p style={cardSubStyle}>Suggested books for your profile</p>
-              </div>
-              <div style={iconBoxStyle}>
-                <FiStar size={18} />
-              </div>
-            </div>
+        <div
+          style={{
+            ...styles.bottomCard,
+            backgroundColor: theme.cardBg,
+            border: `1px solid ${theme.border}`,
+            boxShadow: theme.cardShadow,
+          }}
+        >
+          <SectionHeader
+            icon={<FiStar />}
+            title="Recommendations"
+            subtitle="Suggested books for your profile"
+            theme={theme}
+          />
 
-            {recommendations.slice(0, 5).map((recommendation) => (
-              <div key={recommendation.id} style={recommendationItemStyle}>
-                <strong style={{ color: "#24153f", display: "block" }}>
-                  {recommendation.title}
-                </strong>
-                <p
-                  style={{
-                    margin: "8px 0 0 0",
-                    color: "#7c6a96",
-                    lineHeight: "1.5",
-                    fontSize: "14px",
-                  }}
-                >
-                  {recommendation.author}
-                </p>
+          <div style={styles.recommendationList}>
+            {dashboardRecommendations.map((book, index) => (
+              <div
+                key={`${book.title}-${book.author || "author"}-${index}`}
+                style={styles.recommendationRow}
+              >
+                <strong style={{ color: theme.text }}>{book.title}</strong>
+
+                <span style={{ color: theme.muted }}>
+                  {book.author || "Unknown Author"}
+                </span>
               </div>
             ))}
 
-            {recommendations.length === 0 && (
-              <p style={{ margin: 0, color: "#7c6a96" }}>
+            {dashboardRecommendations.length === 0 && (
+              <p style={{ ...styles.emptyText, color: theme.muted }}>
                 No recommendations available yet.
               </p>
             )}
@@ -410,5 +272,490 @@ function DashboardPage({
     </div>
   );
 }
+
+function calculateReadingStreak(sessions = []) {
+  const readingDays = new Set();
+
+  sessions.forEach((session) => {
+    const sessionDate = getSessionDate(session);
+
+    if (sessionDate) {
+      readingDays.add(getDateKey(sessionDate));
+    }
+  });
+
+  let streak = 0;
+  let missedDays = 0;
+
+  for (let dayOffset = 0; dayOffset < 365; dayOffset += 1) {
+    const date = new Date();
+    date.setHours(0, 0, 0, 0);
+    date.setDate(date.getDate() - dayOffset);
+
+    const dateKey = getDateKey(date);
+
+    if (readingDays.has(dateKey)) {
+      streak += 1;
+      continue;
+    }
+
+    if (missedDays < 1) {
+      missedDays += 1;
+      continue;
+    }
+
+    break;
+  }
+
+  return streak;
+}
+
+function getSessionDate(session) {
+  if (session?.createdAt?.toDate) {
+    return session.createdAt.toDate();
+  }
+
+  if (session?.date === "Today") {
+    return new Date();
+  }
+
+  if (typeof session?.date === "string" && session.date.includes("/")) {
+    const [day, month, year] = session.date.split("/").map(Number);
+
+    if (day && month && year) {
+      return new Date(year, month - 1, day);
+    }
+  }
+
+  return null;
+}
+
+function getDateKey(date) {
+  const localDate = new Date(date);
+  localDate.setHours(0, 0, 0, 0);
+
+  const year = localDate.getFullYear();
+  const month = String(localDate.getMonth() + 1).padStart(2, "0");
+  const day = String(localDate.getDate()).padStart(2, "0");
+
+  return `${year}-${month}-${day}`;
+}
+
+function MetricCard({ metric, theme }) {
+  const tones = {
+    purple: {
+      bg: "#f3e8ff",
+      color: "#7c3aed",
+    },
+    green: {
+      bg: "#dcfce7",
+      color: "#15803d",
+    },
+    amber: {
+      bg: "#fef3c7",
+      color: "#d97706",
+    },
+  };
+
+  const tone = tones[metric.tone];
+
+  return (
+    <div
+      style={{
+        ...styles.metricCard,
+        backgroundColor: theme.cardBg,
+        border: `1px solid ${theme.border}`,
+        boxShadow: theme.cardShadow,
+      }}
+    >
+      <span
+        style={{
+          ...styles.metricIcon,
+          backgroundColor: tone.bg,
+          color: tone.color,
+        }}
+      >
+        {metric.icon}
+      </span>
+
+      <div>
+        <p style={{ ...styles.metricLabel, color: theme.muted }}>
+          {metric.label}
+        </p>
+
+        <h2 style={{ ...styles.metricValue, color: theme.text }}>
+          {metric.value}
+        </h2>
+      </div>
+    </div>
+  );
+}
+
+function SectionHeader({ icon, title, subtitle, theme }) {
+  return (
+    <div style={styles.sectionHeader}>
+      <span style={styles.sectionIcon}>{icon}</span>
+
+      <div>
+        <h3 style={{ ...styles.sectionTitle, color: theme.text }}>{title}</h3>
+
+        <p style={{ ...styles.sectionSubtitle, color: theme.muted }}>
+          {subtitle}
+        </p>
+      </div>
+    </div>
+  );
+}
+
+const lightTheme = {
+  pageBg:
+    "radial-gradient(circle at top left, rgba(168, 85, 247, 0.12), transparent 28%), linear-gradient(135deg, #fbf9ff 0%, #f8f5ff 48%, #f3f0f8 100%)",
+  cardBg: "rgba(255, 255, 255, 0.92)",
+  inputBg: "#ffffff",
+  text: "#111827",
+  muted: "#6b7280",
+  border: "rgba(124, 58, 237, 0.12)",
+  cardShadow: "0 20px 50px rgba(15, 23, 42, 0.08)",
+};
+
+const styles = {
+  page: {
+    minHeight: "100%",
+    margin: "-12px",
+    padding: "22px",
+    display: "flex",
+    flexDirection: "column",
+    gap: "22px",
+    transition: "background 0.25s ease, color 0.25s ease",
+  },
+
+  topBar: {
+    display: "flex",
+    justifyContent: "space-between",
+    alignItems: "center",
+    gap: "16px",
+  },
+
+  pageEyebrow: {
+    margin: "0 0 6px 0",
+    fontSize: "12px",
+    fontWeight: "900",
+    textTransform: "uppercase",
+    letterSpacing: "0.08em",
+  },
+
+  pageTitle: {
+    margin: 0,
+    fontSize: "24px",
+    letterSpacing: "-0.04em",
+  },
+
+  headerGrid: {
+    display: "grid",
+    gridTemplateColumns: "1.45fr 0.65fr",
+    gap: "22px",
+  },
+
+  hero: {
+    minHeight: "280px",
+    borderRadius: "32px",
+    padding: "38px",
+    background:
+      "radial-gradient(circle at top right, rgba(216, 180, 254, 0.55), transparent 34%), linear-gradient(135deg, #2a1647 0%, #5b21b6 55%, #a855f7 100%)",
+    color: "white",
+    position: "relative",
+    overflow: "hidden",
+    display: "flex",
+    alignItems: "center",
+    boxShadow: "0 26px 70px rgba(91, 33, 182, 0.24)",
+  },
+
+  heroContent: {
+    position: "relative",
+    zIndex: 2,
+    maxWidth: "720px",
+  },
+
+  heroEyebrow: {
+    margin: "0 0 18px 0",
+    color: "rgba(255,255,255,0.76)",
+    fontSize: "13px",
+    fontWeight: "900",
+    letterSpacing: "0.08em",
+    textTransform: "uppercase",
+  },
+
+  heroTitle: {
+    margin: "0 0 16px 0",
+    maxWidth: "720px",
+    fontSize: "54px",
+    lineHeight: "1",
+    letterSpacing: "-0.07em",
+  },
+
+  heroText: {
+    margin: 0,
+    maxWidth: "720px",
+    color: "rgba(255,255,255,0.84)",
+    fontSize: "16px",
+    lineHeight: "1.75",
+  },
+
+  heroDecoration: {
+    position: "absolute",
+    right: "34px",
+    top: "28px",
+    bottom: "28px",
+    width: "210px",
+    opacity: 0.23,
+    pointerEvents: "none",
+  },
+
+  floatingBookOne: {
+    position: "absolute",
+    right: "10px",
+    top: "6px",
+    width: "92px",
+    height: "128px",
+    borderRadius: "18px",
+    border: "1px solid rgba(255,255,255,0.5)",
+    backgroundColor: "rgba(255,255,255,0.13)",
+    transform: "rotate(12deg)",
+  },
+
+  floatingBookTwo: {
+    position: "absolute",
+    right: "92px",
+    top: "84px",
+    width: "82px",
+    height: "116px",
+    borderRadius: "16px",
+    border: "1px solid rgba(255,255,255,0.45)",
+    backgroundColor: "rgba(255,255,255,0.11)",
+    transform: "rotate(-10deg)",
+  },
+
+  floatingBookThree: {
+    position: "absolute",
+    right: "22px",
+    bottom: "6px",
+    width: "74px",
+    height: "104px",
+    borderRadius: "15px",
+    border: "1px solid rgba(255,255,255,0.4)",
+    backgroundColor: "rgba(255,255,255,0.09)",
+    transform: "rotate(4deg)",
+  },
+
+  goalPanel: {
+    borderRadius: "32px",
+    padding: "24px",
+    transition: "background 0.25s ease, border 0.25s ease",
+  },
+
+  panelTop: {
+    display: "flex",
+    justifyContent: "space-between",
+    gap: "12px",
+    alignItems: "center",
+  },
+
+  kicker: {
+    margin: "0 0 6px 0",
+    color: "#7c3aed",
+    fontSize: "12px",
+    fontWeight: "900",
+    textTransform: "uppercase",
+    letterSpacing: "0.08em",
+  },
+
+  panelTitle: {
+    margin: 0,
+    fontSize: "24px",
+    letterSpacing: "-0.04em",
+  },
+
+  iconCircle: {
+    width: "46px",
+    height: "46px",
+    borderRadius: "16px",
+    display: "grid",
+    placeItems: "center",
+    backgroundColor: "#f3e8ff",
+    color: "#7c3aed",
+    fontSize: "20px",
+  },
+
+  goalVisualWrap: {
+    display: "grid",
+    placeItems: "center",
+    margin: "22px 0",
+  },
+
+  goalRing: {
+    width: "146px",
+    height: "146px",
+    borderRadius: "50%",
+    display: "grid",
+    placeItems: "center",
+  },
+
+  goalRingInner: {
+    width: "104px",
+    height: "104px",
+    borderRadius: "50%",
+    display: "grid",
+    placeItems: "center",
+    alignContent: "center",
+  },
+
+  goalCupIcon: {
+    color: "#7c3aed",
+    fontSize: "20px",
+    marginBottom: "4px",
+  },
+
+  goalText: {
+    textAlign: "center",
+    fontSize: "14px",
+    lineHeight: "1.55",
+  },
+
+  goalForm: {
+    display: "flex",
+    gap: "8px",
+  },
+
+  goalInput: {
+    flex: 1,
+    padding: "12px",
+    borderRadius: "14px",
+    outline: "none",
+    fontWeight: "800",
+  },
+
+  saveButton: {
+    border: "none",
+    borderRadius: "14px",
+    padding: "0 16px",
+    background: "linear-gradient(135deg, #7c3aed 0%, #a855f7 100%)",
+    color: "white",
+    fontWeight: "900",
+    cursor: "pointer",
+    boxShadow: "0 10px 22px rgba(124, 58, 237, 0.22)",
+  },
+
+  metricGrid: {
+    display: "grid",
+    gridTemplateColumns: "repeat(3, minmax(0, 1fr))",
+    gap: "16px",
+  },
+
+  metricCard: {
+    borderRadius: "24px",
+    padding: "20px",
+    display: "flex",
+    gap: "15px",
+    alignItems: "flex-start",
+    transition: "transform 0.2s ease, box-shadow 0.2s ease",
+  },
+
+  metricIcon: {
+    width: "46px",
+    height: "46px",
+    borderRadius: "16px",
+    display: "grid",
+    placeItems: "center",
+    fontSize: "18px",
+    flexShrink: 0,
+  },
+
+  metricLabel: {
+    margin: "0 0 8px 0",
+    fontSize: "12px",
+    fontWeight: "900",
+  },
+
+  metricValue: {
+    margin: 0,
+    fontSize: "32px",
+    lineHeight: "1",
+    letterSpacing: "-0.04em",
+  },
+
+  bottomGrid: {
+    display: "grid",
+    gridTemplateColumns: "1.45fr 0.75fr",
+    gap: "22px",
+    alignItems: "start",
+  },
+
+  bottomCard: {
+    borderRadius: "30px",
+    padding: "22px",
+  },
+
+  sectionHeader: {
+    display: "flex",
+    alignItems: "center",
+    gap: "13px",
+    marginBottom: "20px",
+  },
+
+  sectionIcon: {
+    width: "46px",
+    height: "46px",
+    borderRadius: "16px",
+    display: "grid",
+    placeItems: "center",
+    backgroundColor: "#f3e8ff",
+    color: "#7c3aed",
+    fontSize: "18px",
+    flexShrink: 0,
+  },
+
+  sectionTitle: {
+    margin: "0 0 4px 0",
+    fontSize: "20px",
+    letterSpacing: "-0.035em",
+  },
+
+  sectionSubtitle: {
+    margin: 0,
+    fontSize: "13px",
+  },
+
+  sessionList: {
+    display: "grid",
+    gap: "12px",
+  },
+
+  sessionRow: {
+    display: "grid",
+    gap: "5px",
+    paddingBottom: "12px",
+    borderBottom: "1px solid rgba(124, 58, 237, 0.08)",
+    fontSize: "13px",
+  },
+
+  recommendationList: {
+    display: "grid",
+    gap: "12px",
+  },
+
+  recommendationRow: {
+    display: "grid",
+    gap: "5px",
+    paddingBottom: "12px",
+    borderBottom: "1px solid rgba(124, 58, 237, 0.08)",
+    fontSize: "13px",
+  },
+
+  emptyText: {
+    margin: 0,
+    fontSize: "13px",
+    lineHeight: "1.6",
+  },
+};
 
 export default DashboardPage;

@@ -24,6 +24,7 @@ import {
 } from "./sessionService";
 import { getPersonalizedRecommendations } from "./recommendationService";
 import { observeAuthState, logoutUser } from "./authService";
+import { attachRatingsToBooks, rateBook } from "./ratingService";
 import "./App.css";
 
 function App() {
@@ -53,6 +54,85 @@ function App() {
 
   const [yearlyGoal, setYearlyGoal] = useState(null);
   const [goalInput, setGoalInput] = useState("");
+
+  function getCurrentYear() {
+    return new Date().getFullYear();
+  }
+
+  function getBookCompletedYear(book) {
+    if (book.completedYear) {
+      return Number(book.completedYear);
+    }
+
+    if (book.completedAt) {
+      const completedDate = book.completedAt?.toDate
+        ? book.completedAt.toDate()
+        : new Date(book.completedAt);
+
+      if (!Number.isNaN(completedDate.getTime())) {
+        return completedDate.getFullYear();
+      }
+    }
+
+    return null;
+  }
+
+  function isCompletedThisYear(book) {
+    if (book.status !== "Completed") {
+      return false;
+    }
+
+    const completedYear = getBookCompletedYear(book);
+
+    if (!completedYear) {
+      return true;
+    }
+
+    return completedYear === getCurrentYear();
+  }
+
+  function getStatusExtraData(newStatus) {
+    if (newStatus === "Completed") {
+      return {
+        completedAt: new Date().toISOString(),
+        completedYear: getCurrentYear(),
+      };
+    }
+
+    return {
+      completedAt: null,
+      completedYear: null,
+    };
+  }
+
+  function shouldMoveToCompletedBeforeThisYear(book) {
+    if (book.status !== "Completed") {
+      return false;
+    }
+
+    const completedYear = getBookCompletedYear(book);
+
+    return completedYear && completedYear < getCurrentYear();
+  }
+
+  function normalizeCompletedBookForCurrentYear(book) {
+    if (shouldMoveToCompletedBeforeThisYear(book)) {
+      return {
+        ...book,
+        status: "Completed Before This Year",
+      };
+    }
+
+    if (book.status === "Completed" && !getBookCompletedYear(book)) {
+      return {
+        ...book,
+        completedAt: new Date().toISOString(),
+        completedYear: getCurrentYear(),
+      };
+    }
+
+    return book;
+  }
 
   function getStatusStyle(status) {
     if (status === "Completed") {
@@ -142,6 +222,63 @@ function App() {
     await getFreshRecommendations(libraryBooks);
   }
 
+  async function handleRateBook(book, ratingValue) {
+    try {
+      const updatedRating = await rateBook(book, ratingValue);
+
+      setLibraryBooks((prevBooks) =>
+        prevBooks.map((libraryBook) => {
+          const sameGoogleBookId =
+            libraryBook.googleBooksId &&
+            book.googleBooksId &&
+            libraryBook.googleBooksId === book.googleBooksId;
+
+          const sameFallbackBook =
+            normalizeText(getBookTitle(libraryBook)) ===
+              normalizeText(getBookTitle(book)) &&
+            normalizeText(getPrimaryAuthor(libraryBook)) ===
+              normalizeText(getPrimaryAuthor(book));
+
+          if (sameGoogleBookId || sameFallbackBook) {
+            return {
+              ...libraryBook,
+              ...updatedRating,
+            };
+          }
+
+          return libraryBook;
+        })
+      );
+
+      setSearchResults((prevResults) =>
+        prevResults.map((searchBook) => {
+          const sameGoogleBookId =
+            searchBook.googleBooksId &&
+            book.googleBooksId &&
+            searchBook.googleBooksId === book.googleBooksId;
+
+          const sameFallbackBook =
+            normalizeText(getBookTitle(searchBook)) ===
+              normalizeText(getBookTitle(book)) &&
+            normalizeText(getPrimaryAuthor(searchBook)) ===
+              normalizeText(getPrimaryAuthor(book));
+
+          if (sameGoogleBookId || sameFallbackBook) {
+            return {
+              ...searchBook,
+              ...updatedRating,
+            };
+          }
+
+          return searchBook;
+        })
+      );
+    } catch (error) {
+      console.error("Failed to rate book:", error);
+      alert("Could not save your rating.");
+    }
+  }
+
   function handleAuthSuccess(user) {
     window.history.replaceState({}, "", "/");
     setCurrentUser(user);
@@ -157,8 +294,13 @@ function App() {
   async function loadYearlyGoal() {
     try {
       const goalData = await getYearlyGoal();
+      const currentYear = getCurrentYear();
 
-      if (goalData && Number(goalData.targetBooks) > 0) {
+      if (
+        goalData &&
+        Number(goalData.targetBooks) > 0 &&
+        Number(goalData.year) === currentYear
+      ) {
         const target = Number(goalData.targetBooks);
         setYearlyGoal(target);
         setGoalInput(String(target));
@@ -184,7 +326,7 @@ function App() {
     }
 
     try {
-      await saveYearlyGoal(numericGoal);
+      await saveYearlyGoal(numericGoal, getCurrentYear());
       setYearlyGoal(numericGoal);
     } catch (error) {
       console.error("Failed to save yearly goal:", error);
@@ -232,8 +374,36 @@ function App() {
     async function loadLibraryBooks() {
       try {
         const books = await getLibraryBooks();
-        setLibraryBooks(books);
-        await getFreshRecommendations(books);
+
+        const normalizedBooks = books.map((book) =>
+          normalizeCompletedBookForCurrentYear(book)
+        );
+
+        const booksNeedingFirestoreUpdate = normalizedBooks.filter(
+          (book, index) => {
+            const originalBook = books[index];
+
+            return (
+              originalBook.status !== book.status ||
+              originalBook.completedYear !== book.completedYear ||
+              originalBook.completedAt !== book.completedAt
+            );
+          }
+        );
+
+        await Promise.all(
+          booksNeedingFirestoreUpdate.map((book) =>
+            updateLibraryBookStatus(book.id, book.status, {
+              completedAt: book.completedAt || null,
+              completedYear: book.completedYear || null,
+            })
+          )
+        );
+
+        const booksWithRatings = await attachRatingsToBooks(normalizedBooks);
+
+        setLibraryBooks(booksWithRatings);
+        await getFreshRecommendations(booksWithRatings);
       } catch (error) {
         console.error("Failed to load library books:", error);
       }
@@ -265,7 +435,7 @@ function App() {
     );
   }, [recentSessions]);
 
-  const booksRead = useMemo(() => {
+  const allCompletedBooks = useMemo(() => {
     return libraryBooks.filter(
       (book) =>
         book.status === "Completed" ||
@@ -277,8 +447,8 @@ function App() {
     return libraryBooks.filter((book) => book.status === "Reading").length;
   }, [libraryBooks]);
 
-  const goalEligibleBooks = useMemo(() => {
-    return libraryBooks.filter((book) => book.status === "Completed").length;
+  const completedBooksThisYear = useMemo(() => {
+    return libraryBooks.filter((book) => isCompletedThisYear(book)).length;
   }, [libraryBooks]);
 
   const effectiveYearlyGoal = useMemo(() => {
@@ -291,10 +461,10 @@ function App() {
     }
 
     return Math.min(
-      Math.round((goalEligibleBooks / effectiveYearlyGoal) * 100),
+      Math.round((completedBooksThisYear / effectiveYearlyGoal) * 100),
       100
     );
-  }, [goalEligibleBooks, effectiveYearlyGoal]);
+  }, [completedBooksThisYear, effectiveYearlyGoal]);
 
   function formatReadingTime(totalMinutes) {
     const minutes = Number(totalMinutes) || 0;
@@ -325,8 +495,13 @@ function App() {
       icon: statIcons.time,
     },
     {
-      title: "Completed Books",
-      value: String(booksRead),
+      title: "Completed This Year",
+      value: String(completedBooksThisYear),
+      icon: statIcons.books,
+    },
+    {
+      title: "All Completed Books",
+      value: String(allCompletedBooks),
       icon: statIcons.books,
     },
   ];
@@ -334,14 +509,14 @@ function App() {
   async function handleAddSession(event) {
     event.preventDefault();
 
-    if (!bookTitle.trim() || !duration.trim() || !pagesRead.trim()) {
+    if (!bookTitle.trim() || !pagesRead.trim()) {
       return;
     }
 
     try {
       const savedSession = await addReadingSession({
         bookTitle: bookTitle.trim(),
-        duration: Number(duration),
+        duration: 0,
         pagesRead: Number(pagesRead),
       });
 
@@ -373,10 +548,13 @@ function App() {
       return;
     }
 
+    const statusExtraData = getStatusExtraData(bookStatus);
+
     const newBook = {
       title: bookName.trim(),
       author: authorName.trim(),
       status: bookStatus,
+      ...statusExtraData,
     };
 
     try {
@@ -396,11 +574,15 @@ function App() {
         description: "",
         publishedDate: "",
         pageCount: "",
+        averageRating: 0,
+        ratingCount: 0,
+        ratingSum: 0,
+        userRating: 0,
       };
 
       const updatedBooks = [savedBook, ...libraryBooks];
-      setLibraryBooks(updatedBooks);
 
+      setLibraryBooks(updatedBooks);
       setBookName("");
       setAuthorName("");
       setBookStatus("Want to Read");
@@ -416,6 +598,7 @@ function App() {
       await deleteLibraryBook(bookId);
 
       const updatedBooks = libraryBooks.filter((book) => book.id !== bookId);
+
       setLibraryBooks(updatedBooks);
       await getFreshRecommendations(updatedBooks);
     } catch (error) {
@@ -425,10 +608,18 @@ function App() {
 
   async function handleUpdateBookStatus(bookId, newStatus) {
     try {
-      await updateLibraryBookStatus(bookId, newStatus);
+      const statusExtraData = getStatusExtraData(newStatus);
+
+      await updateLibraryBookStatus(bookId, newStatus, statusExtraData);
 
       const updatedBooks = libraryBooks.map((book) =>
-        book.id === bookId ? { ...book, status: newStatus } : book
+        book.id === bookId
+          ? {
+              ...book,
+              status: newStatus,
+              ...statusExtraData,
+            }
+          : book
       );
 
       setLibraryBooks(updatedBooks);
@@ -464,6 +655,10 @@ function App() {
         id: result.id,
         ...newBook,
         cover: newBook.thumbnail || newBook.cover || "",
+        averageRating: book.averageRating || 0,
+        ratingCount: book.ratingCount || 0,
+        ratingSum: book.ratingSum || 0,
+        userRating: book.userRating || 0,
       };
 
       setLibraryBooks((prevBooks) => [savedBook, ...prevBooks]);
@@ -530,7 +725,9 @@ function App() {
         status: "Want to Read",
       }));
 
-      setSearchResults(books);
+      const booksWithRatings = await attachRatingsToBooks(books);
+
+      setSearchResults(booksWithRatings);
     } catch (error) {
       console.error("Search failed:", error);
       setSearchResults([]);
@@ -629,6 +826,7 @@ function App() {
           <main style={contentStyle}>
             <div style={topBarStyle}>
               <span style={userBadgeStyle}>{currentUser.email}</span>
+
               <button
                 type="button"
                 onClick={handleLogout}
@@ -670,6 +868,7 @@ function App() {
                     handleAddBook={handleAddBook}
                     handleDeleteBook={handleDeleteBook}
                     handleUpdateBookStatus={handleUpdateBookStatus}
+                    handleRateBook={handleRateBook}
                     getStatusStyle={getStatusStyle}
                   />
                 }

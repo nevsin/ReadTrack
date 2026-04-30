@@ -5,6 +5,7 @@ import {
   doc,
   getDocs,
   updateDoc,
+  serverTimestamp,
 } from "firebase/firestore";
 import { db, auth } from "./firebase";
 
@@ -64,11 +65,17 @@ function mapLibraryBook(item) {
     description: data.description || "",
     publishedDate: data.publishedDate || "",
     pageCount: data.pageCount || "",
+    completedAt: data.completedAt || null,
+    completedYear: data.completedYear || null,
     createdAt: data.createdAt || null,
+    updatedAt: data.updatedAt || null,
   };
 }
 
-export function buildLibraryBookFromGoogleBook(googleBook, status = "Want to Read") {
+export function buildLibraryBookFromGoogleBook(
+  googleBook,
+  status = "Want to Read"
+) {
   return {
     title: googleBook?.title || "",
     author:
@@ -82,6 +89,8 @@ export function buildLibraryBookFromGoogleBook(googleBook, status = "Want to Rea
     description: googleBook?.description || "",
     publishedDate: googleBook?.publishedDate || "",
     pageCount: googleBook?.pageCount || "",
+    completedAt: null,
+    completedYear: null,
   };
 }
 
@@ -122,7 +131,10 @@ export async function addLibraryBook(book) {
     description: normalizeText(book?.description),
     publishedDate: normalizeText(book?.publishedDate),
     pageCount: book?.pageCount || "",
+    completedAt: book?.completedAt || null,
+    completedYear: book?.completedYear || null,
     createdAt: new Date(),
+    updatedAt: serverTimestamp(),
   };
 
   if (!payload.title || !payload.author) {
@@ -166,11 +178,17 @@ export async function deleteLibraryBook(bookId) {
   await deleteDoc(doc(db, "users", uid, "libraryBooks", bookId));
 }
 
-export async function updateLibraryBookStatus(bookId, newStatus) {
+export async function updateLibraryBookStatus(
+  bookId,
+  newStatus,
+  extraData = {}
+) {
   const uid = getCurrentUserId();
 
   await updateDoc(doc(db, "users", uid, "libraryBooks", bookId), {
     status: normalizeStatus(newStatus),
+    ...extraData,
+    updatedAt: serverTimestamp(),
   });
 }
 
@@ -217,6 +235,20 @@ export async function updateLibraryBook(bookId, updates = {}) {
   if (updates.pageCount !== undefined) {
     payload.pageCount = updates.pageCount || "";
   }
+
+  if (updates.completedAt !== undefined) {
+    payload.completedAt = updates.completedAt;
+  }
+
+  if (updates.completedYear !== undefined) {
+    payload.completedYear = updates.completedYear;
+  }
+
+  if (Object.keys(payload).length === 0) {
+    return;
+  }
+
+  payload.updatedAt = serverTimestamp();
 
   await updateDoc(doc(db, "users", uid, "libraryBooks", bookId), payload);
 }

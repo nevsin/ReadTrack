@@ -131,6 +131,39 @@ function RecommendationsPage({
     color: "#8b5cf6",
   };
 
+  const ratingBoxStyle = {
+    border: "1px solid #eadffc",
+    background: "rgba(255,255,255,0.72)",
+    borderRadius: "16px",
+    padding: "10px 11px",
+    display: "grid",
+    gap: "6px",
+  };
+
+  const ratingLabelStyle = {
+    margin: 0,
+    color: "#6f5f88",
+    fontSize: "11px",
+    fontWeight: "800",
+    textTransform: "uppercase",
+    letterSpacing: "0.04em",
+  };
+
+  const ratingTextStyle = {
+    margin: 0,
+    color: "#24153f",
+    fontSize: "13px",
+    fontWeight: "800",
+    lineHeight: "1.4",
+  };
+
+  const starPreviewStyle = {
+    display: "flex",
+    gap: "2px",
+    fontSize: "16px",
+    lineHeight: "1",
+  };
+
   const reasonTagStyle = {
     display: "inline-flex",
     alignSelf: "flex-start",
@@ -178,13 +211,35 @@ function RecommendationsPage({
     return true;
   }
 
+  function getAverageRatingText(book) {
+    const average = Number(book.averageRating || 0);
+    const count = Number(book.ratingCount || 0);
+
+    if (!average || !count) {
+      return "No community rating yet";
+    }
+
+    return `${average.toFixed(1)} / 5 · ${count} rating${count > 1 ? "s" : ""}`;
+  }
+
+  function getRoundedStars(book) {
+    const average = Number(book.averageRating || 0);
+
+    if (!average) {
+      return 0;
+    }
+
+    return Math.round(average);
+  }
+
   return (
     <div style={pageWrapStyle}>
       <div style={headerStyle}>
         <div style={headerTextWrapStyle}>
           <h2 style={titleStyle}>Recommendations</h2>
           <p style={subtitleStyle}>
-            Discover suggested books based on your library and reading profile.
+            Discover suggested books based on your library, reading profile, and
+            community rating signals.
           </p>
         </div>
 
@@ -209,80 +264,113 @@ function RecommendationsPage({
 
         {!recommendationsLoading && (
           <div style={recommendationGridStyle}>
-            {recommendations.map((recommendation) => (
-              <div key={recommendation.id} style={recommendationCardStyle}>
-                <div style={coverWrapStyle}>
-                  {hasUsableCover(recommendation.cover) ? (
-                    <img
-                      src={recommendation.cover}
-                      alt={recommendation.title}
-                      style={coverStyle}
-                    />
-                  ) : (
-                    <div style={placeholderStyle}>
-                      <div style={placeholderIconStyle}>📘</div>
-                      <div style={placeholderTextStyle}>No Cover Available</div>
-                    </div>
-                  )}
-                </div>
+            {recommendations.map((recommendation) => {
+              const roundedStars = getRoundedStars(recommendation);
 
+              return (
                 <div
-                  style={{
-                    display: "flex",
-                    flexDirection: "column",
-                    gap: "6px",
-                    minHeight: "84px",
-                  }}
+                  key={recommendation.id || recommendation.googleBooksId || recommendation.title}
+                  style={recommendationCardStyle}
                 >
-                  <h4
-                    style={{
-                      margin: 0,
-                      fontSize: "18px",
-                      color: "#24153f",
-                      lineHeight: "1.4",
-                    }}
-                  >
-                    {recommendation.title}
-                  </h4>
-
-                  <p
-                    style={{
-                      margin: 0,
-                      color: "#9a88b3",
-                      fontSize: "14px",
-                      fontWeight: "600",
-                      lineHeight: "1.5",
-                    }}
-                  >
-                    {recommendation.author}
-                  </p>
-                </div>
-
-                <div
-                  style={{
-                    marginTop: "auto",
-                    display: "flex",
-                    flexDirection: "column",
-                    gap: "10px",
-                  }}
-                >
-                  {recommendation.reason &&
-                    getShortReason(recommendation.reason) && (
-                      <span style={reasonTagStyle}>
-                        {getShortReason(recommendation.reason)}
-                      </span>
+                  <div style={coverWrapStyle}>
+                    {hasUsableCover(recommendation.cover || recommendation.thumbnail) ? (
+                      <img
+                        src={recommendation.cover || recommendation.thumbnail}
+                        alt={recommendation.title}
+                        style={coverStyle}
+                      />
+                    ) : (
+                      <div style={placeholderStyle}>
+                        <div style={placeholderIconStyle}>📘</div>
+                        <div style={placeholderTextStyle}>
+                          No Cover Available
+                        </div>
+                      </div>
                     )}
+                  </div>
 
-                  <button
-                    type="button"
-                    onClick={() => onAddRecommendationToLibrary(recommendation)}
-                    style={addButtonStyle}
+                  <div
+                    style={{
+                      display: "flex",
+                      flexDirection: "column",
+                      gap: "6px",
+                      minHeight: "84px",
+                    }}
                   >
-                    Add to Library
-                  </button>
+                    <h4
+                      style={{
+                        margin: 0,
+                        fontSize: "18px",
+                        color: "#24153f",
+                        lineHeight: "1.4",
+                      }}
+                    >
+                      {recommendation.title}
+                    </h4>
+
+                    <p
+                      style={{
+                        margin: 0,
+                        color: "#9a88b3",
+                        fontSize: "14px",
+                        fontWeight: "600",
+                        lineHeight: "1.5",
+                      }}
+                    >
+                      {recommendation.author}
+                    </p>
+                  </div>
+
+                  <div style={ratingBoxStyle}>
+                    <p style={ratingLabelStyle}>Community Rating</p>
+
+                    <p style={ratingTextStyle}>
+                      {getAverageRatingText(recommendation)}
+                    </p>
+
+                    <div style={starPreviewStyle}>
+                      {[1, 2, 3, 4, 5].map((star) => (
+                        <span
+                          key={star}
+                          style={{
+                            color:
+                              star <= roundedStars ? "#f59e0b" : "#d8c9ef",
+                          }}
+                        >
+                          ★
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div
+                    style={{
+                      marginTop: "auto",
+                      display: "flex",
+                      flexDirection: "column",
+                      gap: "10px",
+                    }}
+                  >
+                    {recommendation.reason &&
+                      getShortReason(recommendation.reason) && (
+                        <span style={reasonTagStyle}>
+                          {getShortReason(recommendation.reason)}
+                        </span>
+                      )}
+
+                    <button
+                      type="button"
+                      onClick={() =>
+                        onAddRecommendationToLibrary(recommendation)
+                      }
+                      style={addButtonStyle}
+                    >
+                      Add to Library
+                    </button>
+                  </div>
                 </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         )}
 
