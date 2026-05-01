@@ -95,11 +95,13 @@ function RecommendationsPage({
     aspectRatio: "3 / 4",
     borderRadius: "14px",
     overflow: "hidden",
-    background: "linear-gradient(180deg, #f6f0ff 0%, #efe6ff 100%)",
+    background:
+      "linear-gradient(135deg, #2a1647 0%, #7c3aed 55%, #c084fc 100%)",
     border: "1px solid #eee5fb",
     display: "flex",
     alignItems: "center",
     justifyContent: "center",
+    boxShadow: "0 10px 20px rgba(76, 29, 149, 0.14)",
   };
 
   const coverStyle = {
@@ -110,25 +112,15 @@ function RecommendationsPage({
   };
 
   const placeholderStyle = {
-    display: "flex",
-    flexDirection: "column",
-    alignItems: "center",
-    justifyContent: "center",
-    gap: "10px",
-    textAlign: "center",
-    padding: "18px",
-    color: "#8b5cf6",
-  };
-
-  const placeholderIconStyle = {
-    fontSize: "34px",
-    lineHeight: 1,
-  };
-
-  const placeholderTextStyle = {
-    fontSize: "13px",
-    fontWeight: "700",
-    color: "#8b5cf6",
+    width: "100%",
+    height: "100%",
+    display: "grid",
+    placeItems: "center",
+    background:
+      "linear-gradient(135deg, #2a1647 0%, #7c3aed 55%, #c084fc 100%)",
+    color: "white",
+    fontSize: "42px",
+    fontWeight: "800",
   };
 
   const ratingBoxStyle = {
@@ -266,25 +258,27 @@ function RecommendationsPage({
           <div style={recommendationGridStyle}>
             {recommendations.map((recommendation) => {
               const roundedStars = getRoundedStars(recommendation);
+              const cover = recommendation.cover || recommendation.thumbnail;
 
               return (
                 <div
-                  key={recommendation.id || recommendation.googleBooksId || recommendation.title}
+                  key={
+                    recommendation.id ||
+                    recommendation.googleBooksId ||
+                    recommendation.title
+                  }
                   style={recommendationCardStyle}
                 >
                   <div style={coverWrapStyle}>
-                    {hasUsableCover(recommendation.cover || recommendation.thumbnail) ? (
+                    {hasUsableCover(cover) ? (
                       <img
-                        src={recommendation.cover || recommendation.thumbnail}
+                        src={cover}
                         alt={recommendation.title}
                         style={coverStyle}
                       />
                     ) : (
                       <div style={placeholderStyle}>
-                        <div style={placeholderIconStyle}>📘</div>
-                        <div style={placeholderTextStyle}>
-                          No Cover Available
-                        </div>
+                        {recommendation.title?.charAt(0)?.toUpperCase() || "B"}
                       </div>
                     )}
                   </div>

@@ -44,9 +44,26 @@ function LibraryPage({
         ? [...libraryBooks]
         : libraryBooks.filter((book) => book.status === activeTab);
 
+    const statusOrder = {
+      Reading: 1,
+      "Want to Read": 2,
+      Completed: 3,
+      "Completed Before This Year": 4,
+    };
+
     return books.sort((a, b) => {
+      if (activeTab === "All") {
+        const statusA = statusOrder[a.status] || 99;
+        const statusB = statusOrder[b.status] || 99;
+
+        if (statusA !== statusB) {
+          return statusA - statusB;
+        }
+      }
+
       const titleA = String(a.title || "").toLocaleLowerCase("tr");
       const titleB = String(b.title || "").toLocaleLowerCase("tr");
+
       return titleA.localeCompare(titleB, "tr");
     });
   }, [libraryBooks, activeTab]);

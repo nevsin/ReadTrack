@@ -43,7 +43,6 @@ function DashboardPage({
     .map((session) => ({
       title: session.bookTitle,
       pagesRead: Number(session.pagesRead || 0),
-      duration: Number(session.duration || 0),
       date: session.date || "Recently",
     }))
     .slice(0, 3);
@@ -218,8 +217,7 @@ function DashboardPage({
                 <strong style={{ color: theme.text }}>{session.title}</strong>
 
                 <span style={{ color: theme.muted }}>
-                  {session.duration} minutes • {session.pagesRead} pages •{" "}
-                  {session.date}
+                   {session.pagesRead} pages • {session.date}
                 </span>
               </div>
             ))}
