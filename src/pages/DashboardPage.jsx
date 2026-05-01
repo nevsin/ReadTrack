@@ -2,6 +2,7 @@ import {
   FiAward,
   FiBookOpen,
   FiCheckCircle,
+  FiHeart,
   FiStar,
   FiTrendingUp,
 } from "react-icons/fi";
@@ -37,6 +38,13 @@ function DashboardPage({
     yearlyBookGoal > 0 ? Math.max(yearlyBookGoal - completedBooks, 0) : 0;
 
   const readingStreak = calculateReadingStreak(safeSessions);
+
+  const motivationalFeedback = generateMotivationalFeedback({
+    sessions: safeSessions,
+    yearlyBookGoal,
+    completedBooks,
+    readingStreak,
+  });
 
   const recentReadingSessions = safeSessions
     .filter((session) => String(session.bookTitle || "").trim())
@@ -192,6 +200,35 @@ function DashboardPage({
         ))}
       </section>
 
+      <section
+        style={{
+          ...styles.motivationCard,
+          backgroundColor: theme.cardBg,
+          border: `1px solid ${theme.border}`,
+          boxShadow: theme.cardShadow,
+        }}
+      >
+        <div style={styles.motivationLeft}>
+          <span style={styles.motivationIcon}>
+            <FiHeart />
+          </span>
+
+          <div>
+            <p style={styles.kicker}>Reading Motivation</p>
+
+            <h3 style={{ ...styles.motivationTitle, color: theme.text }}>
+              {motivationalFeedback.title}
+            </h3>
+
+            <p style={{ ...styles.motivationText, color: theme.muted }}>
+              {motivationalFeedback.message}
+            </p>
+          </div>
+        </div>
+
+        <span style={styles.autoTag}>Based on your activity</span>
+      </section>
+
       <section style={styles.bottomGrid}>
         <div
           style={{
@@ -217,7 +254,7 @@ function DashboardPage({
                 <strong style={{ color: theme.text }}>{session.title}</strong>
 
                 <span style={{ color: theme.muted }}>
-                   {session.pagesRead} pages • {session.date}
+                  {session.pagesRead} pages • {session.date}
                 </span>
               </div>
             ))}
@@ -269,6 +306,108 @@ function DashboardPage({
       </section>
     </div>
   );
+}
+
+function generateMotivationalFeedback({
+  sessions = [],
+  yearlyBookGoal = 0,
+  completedBooks = 0,
+  readingStreak = 0,
+}) {
+  const lastSessionDate = getMostRecentSessionDate(sessions);
+
+  const remainingBooks =
+    yearlyBookGoal > 0 ? Math.max(yearlyBookGoal - completedBooks, 0) : 0;
+
+  if (!lastSessionDate) {
+    if (yearlyBookGoal > 0) {
+      return {
+        title: "Start with a small step",
+        message: `Your yearly goal is set to ${yearlyBookGoal} books. Record your first reading session to begin building your reading habit.`,
+      };
+    }
+
+    return {
+      title: "Start with a small step",
+      message:
+        "Record your first reading session to begin building your reading habit.",
+    };
+  }
+
+  const daysSinceLastSession = getDaysBetween(lastSessionDate, new Date());
+
+  if (daysSinceLastSession === 0 && readingStreak >= 3) {
+    return {
+      title: "You are building consistency",
+      message: `You recorded a session today and reached a ${readingStreak}-day reading streak. Keep the routine going.`,
+    };
+  }
+
+  if (daysSinceLastSession === 0) {
+    return {
+      title: "Nice work today",
+      message:
+        "You recorded a reading session today. Consistency matters more than reading a lot at once.",
+    };
+  }
+
+  if (daysSinceLastSession <= 2 && readingStreak > 0) {
+    return {
+      title: "Keep your rhythm",
+      message:
+        "You read recently. A short reading session today can help you continue your routine.",
+    };
+  }
+
+  if (yearlyBookGoal > 0 && remainingBooks === 0) {
+    return {
+      title: "Yearly goal completed",
+      message:
+        "You have reached your yearly reading goal. You can continue reading or set a higher target.",
+    };
+  }
+
+  if (yearlyBookGoal > 0 && remainingBooks > 0) {
+    return {
+      title: "Keep moving toward your goal",
+      message: `You have completed ${completedBooks} of ${yearlyBookGoal} books this year. ${remainingBooks} more book${
+        remainingBooks === 1 ? "" : "s"
+      } to reach your goal.`,
+    };
+  }
+
+  if (daysSinceLastSession >= 3) {
+    return {
+      title: "A short session is enough",
+      message:
+        "You have not recorded a session recently. Even a few pages can help you restart.",
+    };
+  }
+
+  return {
+    title: "Set a simple reading target",
+    message:
+      "You can make your reading habit easier to follow by setting a yearly goal.",
+  };
+}
+
+function getMostRecentSessionDate(sessions = []) {
+  const validDates = sessions
+    .map((session) => getSessionDate(session))
+    .filter(Boolean)
+    .sort((a, b) => b.getTime() - a.getTime());
+
+  return validDates[0] || null;
+}
+
+function getDaysBetween(startDate, endDate) {
+  const start = new Date(startDate);
+  const end = new Date(endDate);
+
+  start.setHours(0, 0, 0, 0);
+  end.setHours(0, 0, 0, 0);
+
+  return Math.floor((end - start) / (1000 * 60 * 60 * 24));
 }
 
 function calculateReadingStreak(sessions = []) {
@@ -679,6 +818,55 @@ const styles = {
     fontSize: "32px",
     lineHeight: "1",
     letterSpacing: "-0.04em",
+  },
+
+  motivationCard: {
+    borderRadius: "28px",
+    padding: "22px",
+    display: "flex",
+    justifyContent: "space-between",
+    alignItems: "center",
+    gap: "18px",
+  },
+
+  motivationLeft: {
+    display: "flex",
+    alignItems: "center",
+    gap: "16px",
+  },
+
+  motivationIcon: {
+    width: "52px",
+    height: "52px",
+    borderRadius: "18px",
+    display: "grid",
+    placeItems: "center",
+    backgroundColor: "#f3e8ff",
+    color: "#7c3aed",
+    fontSize: "20px",
+    flexShrink: 0,
+  },
+
+  motivationTitle: {
+    margin: "0 0 6px 0",
+    fontSize: "22px",
+    letterSpacing: "-0.04em",
+  },
+
+  motivationText: {
+    margin: 0,
+    fontSize: "14px",
+    lineHeight: "1.65",
+  },
+
+  autoTag: {
+    padding: "10px 13px",
+    borderRadius: "999px",
+    backgroundColor: "#f3e8ff",
+    color: "#7c3aed",
+    fontSize: "12px",
+    fontWeight: "900",
+    whiteSpace: "nowrap",
   },
 
   bottomGrid: {
